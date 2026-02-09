@@ -168,6 +168,64 @@ You need to add one setting to your Claude Code settings file.
 
 ```json
 {
+  "statusLine": {
+    "type": "command",
+    "command": "node ~/.claude/hud/custom-hud.mjs",
+    "padding": 0
+  }
+}
+```
+
+> **Windows users:** Replace the path with your full Windows path:
+> ```json
+> "command": "node C:\\Users\\YourName\\.claude\\hud\\custom-hud.mjs"
+> ```
+
+If your settings file already has content, just merge the `statusLine` object into it. Don't replace what's already there.
+
+<details>
+<summary>Example: merging with existing settings</summary>
+
+If your `settings.json` currently looks like this:
+
+```json
+{
+  "env": {
+    "SOME_OTHER_SETTING": "value"
+  },
+  "permissions": {
+    "allow": ["Bash(npm test)"]
+  }
+}
+```
+
+Add the `statusLine` object alongside the existing keys:
+
+```json
+{
+  "env": {
+    "SOME_OTHER_SETTING": "value"
+  },
+  "permissions": {
+    "allow": ["Bash(npm test)"]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node ~/.claude/hud/custom-hud.mjs",
+    "padding": 0
+  }
+}
+```
+
+</details>
+
+<details>
+<summary>Alternative: using the env var method</summary>
+
+You can also configure the HUD using the `CLAUDE_CODE_STATUSLINE_COMMAND` environment variable. This works on most platforms but **may not work on WSL2 or some Linux setups**.
+
+```json
+{
   "env": {
     "CLAUDE_CODE_STATUSLINE_COMMAND": "node ~/.claude/hud/custom-hud.mjs"
   }
@@ -179,31 +237,7 @@ You need to add one setting to your Claude Code settings file.
 > "CLAUDE_CODE_STATUSLINE_COMMAND": "node C:\\Users\\YourName\\.claude\\hud\\custom-hud.mjs"
 > ```
 
-If your settings file already has content, just add the `CLAUDE_CODE_STATUSLINE_COMMAND` line inside the existing `"env"` section. Don't replace what's already there.
-
-<details>
-<summary>Example: merging with existing settings</summary>
-
-If your `settings.json` currently looks like this:
-
-```json
-{
-  "env": {
-    "SOME_OTHER_SETTING": "value"
-  }
-}
-```
-
-Add the new line with a comma:
-
-```json
-{
-  "env": {
-    "SOME_OTHER_SETTING": "value",
-    "CLAUDE_CODE_STATUSLINE_COMMAND": "node ~/.claude/hud/custom-hud.mjs"
-  }
-}
-```
+If the env var method doesn't work for you, switch to the `statusLine` config object above — it's more reliable across all platforms.
 
 </details>
 
