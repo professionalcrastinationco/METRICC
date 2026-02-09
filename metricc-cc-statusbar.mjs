@@ -14,6 +14,7 @@ import { homedir } from "node:os";
 import { join, dirname, basename } from "node:path";
 import { createInterface } from "node:readline";
 import https from "node:https";
+import { execSync } from "node:child_process";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const CACHE_TTL_MS = 60_000;          // 60s cache for usage API
@@ -117,15 +118,36 @@ function isCacheValid(cache) {
 }
 
 function getCredentials() {
+  // Primary: read from JSON file (all platforms)
   try {
-    if (!existsSync(CRED_PATH)) return null;
-    const parsed = JSON.parse(readFileSync(CRED_PATH, "utf-8"));
-    const creds = parsed.claudeAiOauth || parsed;
-    if (!creds.accessToken) return null;
-    return { accessToken: creds.accessToken, expiresAt: creds.expiresAt, refreshToken: creds.refreshToken };
-  } catch {
-    return null;
+    if (existsSync(CRED_PATH)) {
+      const parsed = JSON.parse(readFileSync(CRED_PATH, "utf-8"));
+      const creds = parsed.claudeAiOauth || parsed;
+      if (creds.accessToken) {
+        return { accessToken: creds.accessToken, expiresAt: creds.expiresAt, refreshToken: creds.refreshToken };
+      }
+    }
+  } catch { /* */ }
+
+  // Fallback: macOS Keychain only
+  if (process.platform === "darwin") {
+    try {
+      const raw = execSync('security find-generic-password -s "Claude Code-credentials" -w', {
+        timeout: 3000,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+      }).trim();
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const creds = parsed.claudeAiOauth || parsed;
+        if (creds.accessToken) {
+          return { accessToken: creds.accessToken, expiresAt: creds.expiresAt, refreshToken: creds.refreshToken };
+        }
+      }
+    } catch { /* Keychain entry doesn't exist or parse failed */ }
   }
+
+  return null;
 }
 
 function refreshAccessToken(refreshToken) {
