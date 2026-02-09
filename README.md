@@ -107,7 +107,7 @@ There are two steps: **save the file**, then **point Claude Code to it**.
 
 ### Step 1 — Save the script
 
-You need to put `custom-hud.mjs` in a folder where it will stay. The recommended location is inside your Claude Code config folder.
+You need to put `metricc-cc-statusbar.mjs` in a folder where it will stay. The recommended location is inside your Claude Code config folder.
 
 <details>
 <summary><strong>macOS / Linux</strong></summary>
@@ -116,12 +116,12 @@ Open a terminal and run:
 
 ```bash
 mkdir -p ~/.claude/hud
-curl -o ~/.claude/hud/custom-hud.mjs https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/custom-hud.mjs
+curl -o ~/.claude/hud/metricc-cc-statusbar.mjs https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/metricc-cc-statusbar.mjs
 ```
 
 This creates the folder and downloads the file in one go.
 
-Your file is now at: `~/.claude/hud/custom-hud.mjs`
+Your file is now at: `~/.claude/hud/metricc-cc-statusbar.mjs`
 
 </details>
 
@@ -132,21 +132,21 @@ Open PowerShell and run:
 
 ```powershell
 New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\hud"
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/custom-hud.mjs" -OutFile "$env:USERPROFILE\.claude\hud\custom-hud.mjs"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/metricc-cc-statusbar.mjs" -OutFile "$env:USERPROFILE\.claude\hud\metricc-cc-statusbar.mjs"
 ```
 
-Your file is now at: `C:\Users\<your-username>\.claude\hud\custom-hud.mjs`
+Your file is now at: `C:\Users\<your-username>\.claude\hud\metricc-cc-statusbar.mjs`
 
 </details>
 
 <details>
 <summary><strong>Manual download (any OS)</strong></summary>
 
-1. Click on `custom-hud.mjs` in this repo
+1. Click on `metricc-cc-statusbar.mjs` in this repo
 2. Click the **Raw** button (or **Download**)
 3. Save the file to:
-   - **macOS / Linux:** `~/.claude/hud/custom-hud.mjs`
-   - **Windows:** `C:\Users\<your-username>\.claude\hud\custom-hud.mjs`
+   - **macOS / Linux:** `~/.claude/hud/metricc-cc-statusbar.mjs`
+   - **Windows:** `C:\Users\<your-username>\.claude\hud\metricc-cc-statusbar.mjs`
 4. Create the `hud` folder first if it doesn't exist
 
 </details>
@@ -170,7 +170,7 @@ You need to add one setting to your Claude Code settings file.
 {
   "statusLine": {
     "type": "command",
-    "command": "node ~/.claude/hud/custom-hud.mjs",
+    "command": "node ~/.claude/hud/metricc-cc-statusbar.mjs",
     "padding": 0
   }
 }
@@ -178,7 +178,7 @@ You need to add one setting to your Claude Code settings file.
 
 > **Windows users:** Replace the path with your full Windows path:
 > ```json
-> "command": "node C:\\Users\\YourName\\.claude\\hud\\custom-hud.mjs"
+> "command": "node C:\\Users\\YourName\\.claude\\hud\\metricc-cc-statusbar.mjs"
 > ```
 
 If your settings file already has content, just merge the `statusLine` object into it. Don't replace what's already there.
@@ -211,7 +211,7 @@ Add the `statusLine` object alongside the existing keys:
   },
   "statusLine": {
     "type": "command",
-    "command": "node ~/.claude/hud/custom-hud.mjs",
+    "command": "node ~/.claude/hud/metricc-cc-statusbar.mjs",
     "padding": 0
   }
 }
@@ -227,14 +227,14 @@ You can also configure the HUD using the `CLAUDE_CODE_STATUSLINE_COMMAND` enviro
 ```json
 {
   "env": {
-    "CLAUDE_CODE_STATUSLINE_COMMAND": "node ~/.claude/hud/custom-hud.mjs"
+    "CLAUDE_CODE_STATUSLINE_COMMAND": "node ~/.claude/hud/metricc-cc-statusbar.mjs"
   }
 }
 ```
 
 > **Windows users:** Replace the path with your full Windows path:
 > ```json
-> "CLAUDE_CODE_STATUSLINE_COMMAND": "node C:\\Users\\YourName\\.claude\\hud\\custom-hud.mjs"
+> "CLAUDE_CODE_STATUSLINE_COMMAND": "node C:\\Users\\YourName\\.claude\\hud\\metricc-cc-statusbar.mjs"
 > ```
 
 If the env var method doesn't work for you, switch to the `statusLine` config object above — it's more reliable across all platforms.
@@ -246,11 +246,54 @@ If the env var method doesn't work for you, switch to the `statusLine` config ob
 Close and reopen Claude Code. The HUD will appear at the bottom of your terminal automatically.
 
 > **Tip:** You can also ask Claude Code to do Step 2 for you. Just tell it:
-> *"Set my statusline command to `node ~/.claude/hud/custom-hud.mjs`"*
+> *"Set my statusline command to `node ~/.claude/hud/metricc-cc-statusbar.mjs`"*
 
-### Using with oh-my-claudecode
+### v2 — macOS Keychain Support
 
-If you already use [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode), the included `omc-hud.mjs` wrapper auto-discovers the OMC plugin — no extra setup needed.
+If you're on macOS and your Claude credentials are stored in the system Keychain rather than `~/.claude/.credentials.json`, use the v2 script instead.
+
+**What's different:** v2 adds automatic macOS Keychain credential fallback. It looks for credentials in this order:
+
+1. `~/.claude/.credentials.json` (same as v1 — works on all platforms)
+2. macOS Keychain via `security find-generic-password` (macOS only)
+
+If your JSON credentials file exists and has a valid token, v2 behaves identically to v1. The Keychain fallback only kicks in when the JSON file is missing or empty.
+
+**Who should use v2:** macOS users whose Claude Code stores credentials in Keychain. If you're on Windows or Linux, v1 is all you need.
+
+**Setup:** Same two steps as above — just swap the filename.
+
+<details>
+<summary><strong>macOS / Linux</strong></summary>
+
+```bash
+mkdir -p ~/.claude/hud
+curl -o ~/.claude/hud/metricc-cc-statusbar-v2.mjs https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/metricc-cc-statusbar-v2.mjs
+```
+
+</details>
+
+<details>
+<summary><strong>Windows (PowerShell)</strong></summary>
+
+```powershell
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\hud"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/metricc-cc-statusbar-v2.mjs" -OutFile "$env:USERPROFILE\.claude\hud\metricc-cc-statusbar-v2.mjs"
+```
+
+</details>
+
+Then point your `statusLine` command to the v2 file:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "node ~/.claude/hud/metricc-cc-statusbar-v2.mjs",
+    "padding": 0
+  }
+}
+```
 
 ## Requirements
 
@@ -293,7 +336,7 @@ When agents are running, they appear in a tree view below the main status line:
 
 ## Acknowledgments
 
-METRICC was inspired by and (maybe borrowed some code from - Claude Coded it) from the [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) framework. OMC is a fantastic multi-agent orchestration system for Claude Code (although might not be as useful these days witout the recent updates to Claude Code and the latet Opus model) — go check it out if you haven't already.
+METRICC was inspired by and (maybe borrowed some code from — Claude Coded it) the [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) framework. OMC is a multi-agent orchestration system for Claude Code — go check it out if you haven't already.
 
 ## License
 
