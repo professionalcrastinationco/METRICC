@@ -458,6 +458,13 @@ function colorForPercent(pct, warnAt = 70, critAt = 85) {
   return c.green;
 }
 
+function formatCost(dollars) {
+  if (dollars < 0.01) return "$0.00";
+  if (dollars < 10) return `$${dollars.toFixed(2)}`;
+  if (dollars < 100) return `$${dollars.toFixed(1)}`;
+  return `$${Math.round(dollars)}`;
+}
+
 function contextBar(pct) {
   const filled = Math.round(pct / 10);
   const empty = 10 - filled;
@@ -477,7 +484,7 @@ function formatResetTime(resetDate) {
 function render(usage, transcript, contextPct, modelId, version, latestVersion, cost) {
   const parts = [];
 
-  // Rate limits
+  // Rate limits (subscription) or session cost (API billing)
   if (usage) {
     const fhColor = colorForPercent(usage.fiveHour, 60, 80);
     const wkColor = colorForPercent(usage.sevenDay, 60, 80);
@@ -485,6 +492,8 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
     const wkReset = formatResetTime(usage.sevenDayResets);
     parts.push(`${c.gray}5h:${c.reset} ${fhColor}${Math.round(usage.fiveHour)}%${c.reset}${fhReset ? ` ${fhReset}` : ""}`);
     parts.push(`${c.gray}7d:${c.reset} ${wkColor}${Math.round(usage.sevenDay)}%${c.reset}${wkReset ? ` ${wkReset}` : ""}`);
+  } else if (cost?.total_cost_usd != null) {
+    parts.push(`${c.gray}Cost:${c.reset} ${c.white}${formatCost(cost.total_cost_usd)}${c.reset}`);
   } else {
     parts.push(`${c.gray}5h: --${c.reset}`);
     parts.push(`${c.gray}7d: --${c.reset}`);
