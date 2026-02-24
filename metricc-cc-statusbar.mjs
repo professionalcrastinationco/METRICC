@@ -49,10 +49,10 @@ const c = {
   slate600: "\x1b[38;2;71;85;105m",
   // Tailwind Slate-700 (#334155) for labels
   slate700: "\x1b[38;2;51;65;85m",
-  slate700bold: "\x1b[1m\x1b[38;2;51;65;85m",
+  slate700bold: "\x1b[1;38;2;51;65;85m",
   // Tailwind Slate-800 (#1e293b) for separators and labels
   slate800: "\x1b[38;2;30;41;59m",
-  slate800bold: "\x1b[1m\x1b[38;2;30;41;59m",
+  slate800bold: "\x1b[1;38;2;30;41;59m",
 };
 
 // ── Stdin Parser ───────────────────────────────────────────────────────────────
@@ -497,7 +497,7 @@ function padAnsi(str, width) {
 }
 
 function render(usage, transcript, contextPct, modelId, version, latestVersion, cost, stdinData) {
-  const pipe = `${c.slate800}│${c.reset}`;
+  const pipe = `${c.slate800}│`;
 
   // ── Build columns: { label, value } ──
   const columns = [];
@@ -566,7 +566,7 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
     return Math.max(labelLen, valueLen);
   });
 
-  const labelRow = c.reset + columns.map((col, i) => padAnsi(col.label, colWidths[i])).join(` ${pipe} `);
+  const labelRow = columns.map((col, i) => padAnsi(col.label, colWidths[i])).join(` ${pipe} `);
   const valueRow = columns.map((col, i) => padAnsi(col.value, colWidths[i])).join(` ${pipe} `);
 
   const blankLine = `\n${c.reset}\u200B`;
