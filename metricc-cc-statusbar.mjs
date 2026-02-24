@@ -515,13 +515,13 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
     fhValue = `${c.slate600}--${c.reset}`;
     wkValue = `${c.slate600}--${c.reset}`;
   }
-  columns.push({ label: `${c.slate800bold}5h Usage:${c.reset}`, value: fhValue });
-  columns.push({ label: `${c.slate800bold}7d Usage:${c.reset}`, value: wkValue });
+  columns.push({ label: `${c.slate800bold}5h Usage:`, value: fhValue });
+  columns.push({ label: `${c.slate800bold}7d Usage:`, value: wkValue });
 
   // Context
   const ctxColor = colorForPercent(contextPct);
   const ctxValue = `${ctxColor}${contextPct}%${c.reset} ${c.slate600}Used${c.reset}`;
-  columns.push({ label: `${c.slate800bold}Context:${c.reset}`, value: ctxValue });
+  columns.push({ label: `${c.slate800bold}Context:`, value: ctxValue });
 
   // Changes
   const added = cost?.total_lines_added ?? 0;
@@ -532,16 +532,16 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
   } else {
     chgValue = `${c.slate600}+0/-0${c.reset}`;
   }
-  columns.push({ label: `${c.slate800bold}Changes:${c.reset}`, value: chgValue });
+  columns.push({ label: `${c.slate800bold}Changes:`, value: chgValue });
 
   // Session
   const durationMs = cost?.total_duration_ms ?? 0;
   if (durationMs > 0) {
-    columns.push({ label: `${c.slate800bold}Session:${c.reset}`, value: `${c.slate600}${formatDuration(durationMs)}${c.reset}` });
+    columns.push({ label: `${c.slate800bold}Session:`, value: `${c.slate600}${formatDuration(durationMs)}${c.reset}` });
   }
 
   // Model
-  columns.push({ label: `${c.slate800bold}Model:${c.reset}`, value: `${c.slate600}${modelId}${c.reset}` });
+  columns.push({ label: `${c.slate800bold}Model:`, value: `${c.slate600}${modelId}${c.reset}` });
 
   // Version
   const displayVersion = version || latestVersion;
@@ -550,13 +550,13 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
     if (version && latestVersion && version !== latestVersion) {
       versionStatus = ` ${c.yellow}(update avail)${c.reset}`;
     }
-    columns.push({ label: `${c.slate800bold}Version:${c.reset}`, value: `${c.slate600}v${displayVersion}${c.reset}${versionStatus}` });
+    columns.push({ label: `${c.slate800bold}Version:`, value: `${c.slate600}v${displayVersion}${c.reset}${versionStatus}` });
   }
 
   // Directory
   const workDir = stdinData?.workspace?.current_dir;
   if (workDir) {
-    columns.push({ label: `${c.slate800bold}Directory:${c.reset}`, value: `${c.slate600}${workDir}${c.reset}` });
+    columns.push({ label: `${c.slate800bold}Directory:`, value: `${c.slate600}${workDir}${c.reset}` });
   }
 
   // ── Calculate column widths and render rows ──
@@ -566,8 +566,8 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
     return Math.max(labelLen, valueLen);
   });
 
-  const labelRow = columns.map((col, i) => padAnsi(col.label, colWidths[i])).join(` ${pipe} `);
-  const valueRow = columns.map((col, i) => padAnsi(col.value, colWidths[i])).join(` ${pipe} `);
+  const labelRow = columns.map((col, i) => padAnsi(col.label, colWidths[i])).join(` ${pipe} `) + c.reset;
+  const valueRow = columns.map((col, i) => padAnsi(col.value, colWidths[i])).join(` ${pipe} `) + c.reset;
 
   const blankLine = `\n${c.reset}\u200B`;
   let output = labelRow + "\n" + valueRow;
@@ -638,7 +638,7 @@ async function main() {
     getLatestVersion(),
   ]);
 
-  console.log(render(usage, transcript, contextPct, modelId, version, latestVersion, stdin.cost, stdin));
+  process.stdout.write(render(usage, transcript, contextPct, modelId, version, latestVersion, stdin.cost, stdin) + "\n");
 }
 
 main().catch((err) => {
