@@ -3,11 +3,30 @@
 
 ## A Clean, Lightweight, Design Focused Status Bar for Claude Code
 
-[![Full HUD — click to view full-size](docs/images/hud-full-bar.png)](https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/docs/images/hud-full-bar.png)
+[![Full HUD — click to view full-size](docs/images/hero-agents.png)](https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/docs/images/hero-agents.png)
 
 > **Tip:** Click the image above to view it full-size.
 
 No dependencies to install. Just one file.
+
+---
+
+## What's New in v2
+
+The entire display has been redesigned from a single packed line into a **two-row column layout** with labels on top and data below. Everything is easier to scan, cleaner to look at, and shows more information without feeling cramped.
+
+[![Before and After comparison — click to view full-size](docs/images/comparison.png)](https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/docs/images/comparison.png)
+
+**What changed:**
+
+- **Two-row layout** — Labels sit above their values in aligned columns instead of everything crammed into one line
+- **Tailwind color palette** — Switched from basic ANSI colors to Tailwind's Emerald, Amber, and Red for status indicators, and Slate shades for labels and separators
+- **New: Session timer** — See how long your current session has been running
+- **New: Working directory** — Shows your current workspace path
+- **Full model names in agents** — Agent tree now shows "Sonnet", "Opus", "Haiku" instead of single letters
+- **Cleaner reset times** — Shows `(~3h)` instead of `(3h05m)` — you don't need the minutes
+- **Third row** for agents and todos only appears when they're active — no wasted space
+- **macOS Keychain merged** — No more separate v2 file. Keychain fallback is built in
 
 ---
 
@@ -33,15 +52,15 @@ Claude Code wrote the code. I just refused to accept "good enough" approximately
 
 ## What Each Piece Means
 
-The screenshots below are **zoomed-in views** of each segment of the status bar so they're easy to read here on GitHub. These all sit side-by-side in a single line — to see the assembled result, scroll up to the full screenshot or click any segment image to view it full-size.
+The screenshots below are **zoomed-in views** of each segment. In the actual status bar, the top row shows labels and the bottom row shows values — all sitting side-by-side in aligned columns. A third row appears when agents or todos are active.
 
 ---
 
-### Rate Limits — `5h` and `7d`
+### Rate Limits — `5h Usage` and `7d Usage`
 
 ![Rate Limits](docs/images/seg-rate.png)
 
-Your Anthropic API usage across two windows: the **5-hour** rolling window and the **7-day** rolling window. The percentage shows how much of your limit you've used. The time in parentheses is a countdown until that window resets.
+Your Anthropic API usage across two windows: the **5-hour** rolling window and the **7-day** rolling window. The percentage shows how much of your limit you've used. The time in parentheses is a rough countdown until that window resets.
 
 The color changes automatically as you use more of your limit:
 
@@ -71,13 +90,21 @@ Lines of code **added** (green) and **removed** (red) during this session. A qui
 
 ---
 
+### Session Timer
+
+![Session Timer](docs/images/seg-session.png)
+
+How long the current session has been running. Shows hours and minutes (e.g., `1h42m`) or minutes and seconds for shorter sessions.
+
+---
+
 ### Running Agents
 
 ![Running Agents](docs/images/seg-agents.png)
 
 When Claude Code launches background agents (for research, exploration, etc.), they appear here. The count shows how many are active, and a tree view below the main bar shows details for each one:
 
-- The letter badge shows the model — **s** (Sonnet), **O** (Opus), **h** (Haiku)
+- The model name is color-coded — **Sonnet** (cyan), **Opus** (purple), **Haiku** (green)
 - How long the agent has been running
 - What the agent is doing
 
@@ -97,7 +124,15 @@ When Claude Code is tracking tasks (via `TodoWrite` or `TaskCreate`), this shows
 
 ![Model and Version](docs/images/seg-model-version.png)
 
-The Claude model you're currently using (Opus 4.6, Sonnet 4.5, Haiku 4.5, etc.) and your Claude Code version. If a newer version is available, you'll see **(update avail)** in yellow. If you're on the latest, it just says **(latest)**.
+The Claude model you're currently using (Opus 4.6, Sonnet 4.5, Haiku 4.5, etc.) and your Claude Code version. If a newer version is available, you'll see **(update avail)** in yellow.
+
+---
+
+### Working Directory
+
+![Working Directory](docs/images/seg-directory.png)
+
+The current workspace directory Claude Code is operating in.
 
 ---
 
@@ -248,52 +283,11 @@ Close and reopen Claude Code. The HUD will appear at the bottom of your terminal
 > **Tip:** You can also ask Claude Code to do Step 2 for you. Just tell it:
 > *"Set my statusline command to `node ~/.claude/hud/metricc-cc-statusbar.mjs`"*
 
-### v2 — macOS Keychain Support
+### Upgrading from v1
 
-If you're on macOS and your Claude credentials are stored in the system Keychain rather than `~/.claude/.credentials.json`, use the v2 script instead.
+If you're already using METRICC, just re-run the download command from Step 1 to overwrite the old file. Your settings don't need to change — the filename and path are the same.
 
-**What's different:** v2 adds automatic macOS Keychain credential fallback. It looks for credentials in this order:
-
-1. `~/.claude/.credentials.json` (same as v1 — works on all platforms)
-2. macOS Keychain via `security find-generic-password` (macOS only)
-
-If your JSON credentials file exists and has a valid token, v2 behaves identically to v1. The Keychain fallback only kicks in when the JSON file is missing or empty.
-
-**Who should use v2:** macOS users whose Claude Code stores credentials in Keychain. If you're on Windows or Linux, v1 is all you need.
-
-**Setup:** Same two steps as above — just swap the filename.
-
-<details>
-<summary><strong>macOS / Linux</strong></summary>
-
-```bash
-mkdir -p ~/.claude/hud
-curl -o ~/.claude/hud/metricc-cc-statusbar-v2.mjs https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/metricc-cc-statusbar-v2.mjs
-```
-
-</details>
-
-<details>
-<summary><strong>Windows (PowerShell)</strong></summary>
-
-```powershell
-New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\hud"
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/metricc-cc-statusbar-v2.mjs" -OutFile "$env:USERPROFILE\.claude\hud\metricc-cc-statusbar-v2.mjs"
-```
-
-</details>
-
-Then point your `statusLine` command to the v2 file:
-
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "node ~/.claude/hud/metricc-cc-statusbar-v2.mjs",
-    "padding": 0
-  }
-}
-```
+The separate v2 script (`metricc-cc-statusbar-v2.mjs`) is no longer needed. macOS Keychain support is now built into the main script. If you were using v2, switch your settings to point to `metricc-cc-statusbar.mjs` instead.
 
 ## Requirements
 
@@ -311,15 +305,27 @@ Claude Code sends JSON data to the statusline command every time the display ref
 2. Fetches your rate limits from the Anthropic API (cached for 60 seconds)
 3. Reads the session transcript to find running agents and todo progress
 4. Checks npm for the latest Claude Code version (cached for 1 hour)
-5. Renders everything as a color-coded status line
+5. Renders everything as a color-coded, column-aligned status line
 
 All network requests happen simultaneously so the HUD stays fast.
+
+### Color System
+
+The HUD uses Tailwind CSS colors for consistent, readable status indicators:
+
+| Color | Tailwind | Used for |
+|-------|----------|----------|
+| Green | Emerald-600 `#059669` | Normal / healthy values |
+| Yellow | Amber-600 `#d97706` | Warning thresholds |
+| Red | Red-600 `#dc2626` | Critical thresholds |
+| Labels | Slate-800 `#1e293b` | Column headers |
+| Values | Slate-600 `#475569` | Neutral data |
 
 ### Agent Tracking
 
 When agents are running, they appear in a tree view below the main status line:
 
-- A letter badge shows the model: **O** (Opus), **s** (Sonnet), **h** (Haiku)
+- Full model names are color-coded: **Opus** (purple), **Sonnet** (cyan), **Haiku** (green)
 - Elapsed time since the agent started
 - The agent type and a short description
 - Agents older than 30 minutes are automatically hidden
@@ -331,6 +337,15 @@ When agents are running, they appear in a tree view below the main status line:
 |------|-----------------|-----------|
 | Rate limits | 60 seconds | `~/.claude/hud/.usage-cache.json` |
 | CC version | 1 hour | `~/.claude/hud/.version-cache.json` |
+
+### Credential Handling
+
+The script reads credentials in this order:
+
+1. `~/.claude/.credentials.json` (all platforms)
+2. macOS Keychain via `security find-generic-password` (macOS only, automatic fallback)
+
+Tokens are refreshed automatically when expired.
 
 </details>
 
