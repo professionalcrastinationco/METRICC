@@ -45,14 +45,14 @@ const c = {
   magenta: "\x1b[35m",
   white: "\x1b[37m",
   gray: "\x1b[90m",
-  // Tailwind Slate-600 (#475569) for data values
-  slate600: "\x1b[38;2;71;85;105m",
+  // Tailwind Slate-500 (#64748b) for data values
+  slate600: "\x1b[38;2;100;116;139m",
   // Tailwind Slate-700 (#334155) for labels
   slate700: "\x1b[38;2;51;65;85m",
   slate700bold: "\x1b[1;38;2;51;65;85m",
-  // Tailwind Slate-800 (#1e293b) for separators and labels
-  slate800: "\x1b[38;2;30;41;59m",
-  slate800bold: "\x1b[1;38;2;30;41;59m",
+  // Tailwind Slate-700 (#334155) for separators and labels
+  slate800: "\x1b[38;2;51;65;85m",
+  slate800bold: "\x1b[1;38;2;51;65;85m",
 };
 
 // ── Stdin Parser ───────────────────────────────────────────────────────────────
