@@ -515,13 +515,13 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
     fhValue = `${c.slate600}--${c.reset}`;
     wkValue = `${c.slate600}--${c.reset}`;
   }
-  columns.push({ label: `${c.slate800bold}5h Usage:`, value: fhValue });
-  columns.push({ label: `${c.slate800bold}7d Usage:`, value: wkValue });
+  columns.push({ label: `${c.slate800bold}5h Usage:${c.reset}`, value: fhValue });
+  columns.push({ label: `${c.slate800bold}7d Usage:${c.reset}`, value: wkValue });
 
   // Context
   const ctxColor = colorForPercent(contextPct);
   const ctxValue = `${ctxColor}${contextPct}%${c.reset} ${c.slate600}Used${c.reset}`;
-  columns.push({ label: `${c.slate800bold}Context:`, value: ctxValue });
+  columns.push({ label: `${c.slate800bold}Context:${c.reset}`, value: ctxValue });
 
   // Changes
   const added = cost?.total_lines_added ?? 0;
@@ -532,16 +532,16 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
   } else {
     chgValue = `${c.slate600}+0/-0${c.reset}`;
   }
-  columns.push({ label: `${c.slate800bold}Changes:`, value: chgValue });
+  columns.push({ label: `${c.slate800bold}Changes:${c.reset}`, value: chgValue });
 
   // Session
   const durationMs = cost?.total_duration_ms ?? 0;
   if (durationMs > 0) {
-    columns.push({ label: `${c.slate800bold}Session:`, value: `${c.slate600}${formatDuration(durationMs)}${c.reset}` });
+    columns.push({ label: `${c.slate800bold}Session:${c.reset}`, value: `${c.slate600}${formatDuration(durationMs)}${c.reset}` });
   }
 
   // Model
-  columns.push({ label: `${c.slate800bold}Model:`, value: `${c.slate600}${modelId}${c.reset}` });
+  columns.push({ label: `${c.slate800bold}Model:${c.reset}`, value: `${c.slate600}${modelId}${c.reset}` });
 
   // Version
   const displayVersion = version || latestVersion;
@@ -550,13 +550,13 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
     if (version && latestVersion && version !== latestVersion) {
       versionStatus = ` ${c.yellow}(update avail)${c.reset}`;
     }
-    columns.push({ label: `${c.slate800bold}Version:`, value: `${c.slate600}v${displayVersion}${c.reset}${versionStatus}` });
+    columns.push({ label: `${c.slate800bold}Version:${c.reset}`, value: `${c.slate600}v${displayVersion}${c.reset}${versionStatus}` });
   }
 
   // Directory
   const workDir = stdinData?.workspace?.current_dir;
   if (workDir) {
-    columns.push({ label: `${c.slate800bold}Directory:`, value: `${c.slate600}${workDir}${c.reset}` });
+    columns.push({ label: `${c.slate800bold}Directory:${c.reset}`, value: `${c.slate600}${workDir}${c.reset}` });
   }
 
   // ── Calculate column widths and render rows ──
@@ -566,11 +566,11 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
     return Math.max(labelLen, valueLen);
   });
 
-  const labelRow = columns.map((col, i) => padAnsi(col.label, colWidths[i])).join(` ${pipe} `) + c.reset;
-  const valueRow = columns.map((col, i) => padAnsi(col.value, colWidths[i])).join(` ${pipe} `) + c.reset;
+  const labelRow = c.reset + columns.map((col, i) => padAnsi(col.label, colWidths[i])).join(` ${pipe} `) + c.reset;
+  const valueRow = c.reset + columns.map((col, i) => padAnsi(col.value, colWidths[i])).join(` ${pipe} `) + c.reset;
 
   const blankLine = `\n${c.reset}\u200B`;
-  let output = c.reset + labelRow + "\n" + valueRow;
+  let output = labelRow + "\n" + valueRow;
 
   // ── Line 3: Agents, Agent name, Todos (only if any exist) ──
   const line3 = [];
@@ -594,7 +594,7 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
 
   if (line3.length > 0) {
     const line3Sep = ` ${pipe} `;
-    output += blankLine + "\n" + line3.join(line3Sep);
+    output += blankLine + "\n" + c.reset + line3.join(line3Sep);
   }
 
   // Agent detail tree
@@ -608,7 +608,7 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
       const type = (a.type || "agent").substring(0, 14);
       const desc = (a.description || "").substring(0, 45);
       const modelLabel = a.model === "opus" ? `${c.magenta}Opus${c.reset}` : a.model === "haiku" ? `${c.green}Haiku${c.reset}` : `${c.cyan}Sonnet${c.reset}`;
-      agentLines.push(`${c.slate800}${prefix}${c.reset} ${c.white}${type}${c.reset} ${modelLabel} ${c.slate600}${elapsed.padStart(5)}${c.reset}   ${c.slate600}${desc}${c.reset}`);
+      agentLines.push(`${c.reset}${c.slate800}${prefix}${c.reset} ${c.white}${type}${c.reset} ${modelLabel} ${c.slate600}${elapsed.padStart(5)}${c.reset}   ${c.slate600}${desc}${c.reset}`);
     }
   }
 
@@ -616,7 +616,7 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
     output += "\n" + agentLines.join("\n");
   }
 
-  return output + blankLine + "\n";
+  return (output + blankLine + "\n").replace(/ /g, "\u00A0");
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
@@ -638,7 +638,7 @@ async function main() {
     getLatestVersion(),
   ]);
 
-  process.stdout.write(render(usage, transcript, contextPct, modelId, version, latestVersion, stdin.cost, stdin) + "\n");
+  console.log(render(usage, transcript, contextPct, modelId, version, latestVersion, stdin.cost, stdin));
 }
 
 main().catch((err) => {
