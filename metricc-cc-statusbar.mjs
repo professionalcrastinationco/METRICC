@@ -570,7 +570,7 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
   const valueRow = columns.map((col, i) => padAnsi(col.value, colWidths[i])).join(` ${pipe} `) + c.reset;
 
   const blankLine = `\n${c.reset}\u200B`;
-  let output = labelRow + "\n" + valueRow;
+  let output = c.reset + labelRow + "\n" + valueRow;
 
   // ── Line 3: Agents, Agent name, Todos (only if any exist) ──
   const line3 = [];
