@@ -37,14 +37,22 @@ const c = {
   reset: "\x1b[0m",
   dim: "\x1b[2m",
   bold: "\x1b[1m",
-  green: "\x1b[32m",
-  yellow: "\x1b[33m",
-  red: "\x1b[31m",
+  green: "\x1b[38;2;5;150;105m",      // Tailwind Emerald-600 (#059669)
+  yellow: "\x1b[38;2;217;119;6m",    // Tailwind Amber-600 (#d97706)
+  red: "\x1b[38;2;220;38;38m",       // Tailwind Red-600 (#dc2626)
   cyan: "\x1b[36m",
   blue: "\x1b[34m",
   magenta: "\x1b[35m",
   white: "\x1b[37m",
   gray: "\x1b[90m",
+  // Tailwind Slate-600 (#475569) for data values
+  slate600: "\x1b[38;2;71;85;105m",
+  // Tailwind Slate-700 (#334155) for labels
+  slate700: "\x1b[38;2;51;65;85m",
+  slate700bold: "\x1b[1m\x1b[38;2;51;65;85m",
+  // Tailwind Slate-800 (#1e293b) for separators and labels
+  slate800: "\x1b[38;2;30;41;59m",
+  slate800bold: "\x1b[1m\x1b[38;2;30;41;59m",
 };
 
 // ── Stdin Parser ───────────────────────────────────────────────────────────────
@@ -471,73 +479,125 @@ function formatResetTime(resetDate) {
   if (isNaN(d.getTime())) return "";
   const ms = d.getTime() - Date.now();
   if (ms <= 0) return "";
-  return `${c.dim}(${formatDuration(ms)})${c.reset}`;
+  const totalMin = Math.floor(ms / 60_000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  const short = h > 0 ? `~${h}h` : `${m}m`;
+  return `${c.slate600}(${short})${c.reset}`;
 }
 
-function render(usage, transcript, contextPct, modelId, version, latestVersion, cost) {
-  const parts = [];
+function stripAnsi(str) {
+  return str.replace(/\x1b\[[0-9;]*m/g, "");
+}
 
-  // Rate limits
+function padAnsi(str, width) {
+  const visible = stripAnsi(str).length;
+  const padding = Math.max(0, width - visible);
+  return str + " ".repeat(padding);
+}
+
+function render(usage, transcript, contextPct, modelId, version, latestVersion, cost, stdinData) {
+  const pipe = `${c.slate800}│${c.reset}`;
+
+  // ── Build columns: { label, value } ──
+  const columns = [];
+
+  // 5h rate limit
+  let fhValue, wkValue;
   if (usage) {
     const fhColor = colorForPercent(usage.fiveHour, 60, 80);
     const wkColor = colorForPercent(usage.sevenDay, 60, 80);
     const fhReset = formatResetTime(usage.fiveHourResets);
     const wkReset = formatResetTime(usage.sevenDayResets);
-    parts.push(`${c.gray}5h:${c.reset} ${fhColor}${Math.round(usage.fiveHour)}%${c.reset}${fhReset ? ` ${fhReset}` : ""}`);
-    parts.push(`${c.gray}7d:${c.reset} ${wkColor}${Math.round(usage.sevenDay)}%${c.reset}${wkReset ? ` ${wkReset}` : ""}`);
+    fhValue = `${fhColor}${Math.round(usage.fiveHour)}%${c.reset}${fhReset ? ` ${fhReset}` : ""}`;
+    wkValue = `${wkColor}${Math.round(usage.sevenDay)}%${c.reset}${wkReset ? ` ${wkReset}` : ""}`;
   } else {
-    parts.push(`${c.gray}5h: --${c.reset}`);
-    parts.push(`${c.gray}7d: --${c.reset}`);
+    fhValue = `${c.slate600}--${c.reset}`;
+    wkValue = `${c.slate600}--${c.reset}`;
   }
+  columns.push({ label: `${c.slate800bold}5h Usage:${c.reset}`, value: fhValue });
+  columns.push({ label: `${c.slate800bold}7d Usage:${c.reset}`, value: wkValue });
 
-  // Context window
+  // Context
   const ctxColor = colorForPercent(contextPct);
-  parts.push(`${c.gray}Context:${c.reset} ${ctxColor}${contextPct}%${c.reset}`);
+  const ctxValue = `${ctxColor}${contextPct}%${c.reset} ${c.slate600}Used${c.reset}`;
+  columns.push({ label: `${c.slate800bold}Context:${c.reset}`, value: ctxValue });
 
-  // Lines changed
+  // Changes
   const added = cost?.total_lines_added ?? 0;
   const removed = cost?.total_lines_removed ?? 0;
+  let chgValue;
   if (added || removed) {
-    parts.push(`${c.gray}Changes:${c.reset} ${c.green}+${added}${c.reset}${c.dim}/${c.reset}${c.red}-${removed}${c.reset}`);
+    chgValue = `${c.green}+${added}${c.reset}${c.slate600}/${c.reset}${c.red}-${removed}${c.reset}`;
   } else {
-    parts.push(`${c.gray}Changes:${c.reset} ${c.dim}+0/-0${c.reset}`);
+    chgValue = `${c.slate600}+0/-0${c.reset}`;
+  }
+  columns.push({ label: `${c.slate800bold}Changes:${c.reset}`, value: chgValue });
+
+  // Session
+  const durationMs = cost?.total_duration_ms ?? 0;
+  if (durationMs > 0) {
+    columns.push({ label: `${c.slate800bold}Session:${c.reset}`, value: `${c.slate600}${formatDuration(durationMs)}${c.reset}` });
   }
 
-  // Agents
+  // Model
+  columns.push({ label: `${c.slate800bold}Model:${c.reset}`, value: `${c.slate600}${modelId}${c.reset}` });
+
+  // Version
+  const displayVersion = version || latestVersion;
+  if (displayVersion) {
+    let versionStatus = "";
+    if (version && latestVersion && version !== latestVersion) {
+      versionStatus = ` ${c.yellow}(update avail)${c.reset}`;
+    }
+    columns.push({ label: `${c.slate800bold}Version:${c.reset}`, value: `${c.slate600}v${displayVersion}${c.reset}${versionStatus}` });
+  }
+
+  // Directory
+  const workDir = stdinData?.workspace?.current_dir;
+  if (workDir) {
+    columns.push({ label: `${c.slate800bold}Directory:${c.reset}`, value: `${c.slate600}${workDir}${c.reset}` });
+  }
+
+  // ── Calculate column widths and render rows ──
+  const colWidths = columns.map((col) => {
+    const labelLen = stripAnsi(col.label).length;
+    const valueLen = stripAnsi(col.value).length;
+    return Math.max(labelLen, valueLen);
+  });
+
+  const labelRow = c.reset + columns.map((col, i) => padAnsi(col.label, colWidths[i])).join(` ${pipe} `);
+  const valueRow = columns.map((col, i) => padAnsi(col.value, colWidths[i])).join(` ${pipe} `);
+
+  const blankLine = `\n${c.reset}\u200B`;
+  let output = labelRow + "\n" + valueRow;
+
+  // ── Line 3: Agents, Agent name, Todos (only if any exist) ──
+  const line3 = [];
   const running = transcript.agents.filter((a) => a.status === "running");
+
   if (running.length > 0) {
-    parts.push(`${c.gray}Agents:${c.reset} ${c.cyan}${running.length}${c.reset}`);
+    line3.push(`${c.slate800bold}Agents:${c.reset} ${c.cyan}${running.length}${c.reset}`);
   }
 
-  // Todos
+  const agentName = stdinData?.agent?.name;
+  if (agentName) {
+    line3.push(`${c.slate800bold}Agent:${c.reset} ${c.magenta}${agentName}${c.reset}`);
+  }
+
   if (transcript.todos.length > 0) {
     const done = transcript.todos.filter((t) => t.status === "completed").length;
     const total = transcript.todos.length;
     const todoColor = done === total ? c.green : c.yellow;
-    parts.push(`${c.gray}Todos:${c.reset} ${todoColor}${done}/${total}${c.reset}`);
+    line3.push(`${c.slate800bold}Todos:${c.reset} ${todoColor}${done}/${total}${c.reset}`);
   }
 
-  // Model ID
-  parts.push(`${c.dim}${modelId}${c.reset}`);
-
-  // CC version + update status
-  const displayVersion = version || latestVersion;
-  if (displayVersion) {
-    let versionStatus = "";
-    if (version && latestVersion) {
-      versionStatus = version === latestVersion
-        ? ` ${c.dim}(latest)${c.reset}`
-        : ` ${c.yellow}(update avail)${c.reset}`;
-    } else if (!version && latestVersion) {
-      versionStatus = ` ${c.dim}(latest)${c.reset}`;
-    }
-    parts.push(`${c.dim}CC v${displayVersion}${c.reset}${versionStatus}`);
+  if (line3.length > 0) {
+    const line3Sep = ` ${pipe} `;
+    output += blankLine + "\n" + line3.join(line3Sep);
   }
 
-  // Main line
-  const mainLine = parts.join(` ${c.dim}|${c.reset} `);
-
-  // Agent detail lines
+  // Agent detail tree
   const agentLines = [];
   if (running.length > 0) {
     for (let i = 0; i < running.length && i < 5; i++) {
@@ -545,15 +605,18 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
       const isLast = i === running.length - 1 || i === 4;
       const prefix = isLast ? "└─" : "├─";
       const elapsed = formatDuration(Date.now() - a.startTime.getTime());
-      const type = (a.type || "agent").substring(0, 14).padEnd(14);
+      const type = (a.type || "agent").substring(0, 14);
       const desc = (a.description || "").substring(0, 45);
-      const modelBadge = a.model === "opus" ? `${c.magenta}O${c.reset}` : a.model === "haiku" ? `${c.green}h${c.reset}` : `${c.cyan}s${c.reset}`;
-      agentLines.push(`${c.dim}${prefix}${c.reset} ${modelBadge} ${c.white}${type}${c.reset} ${c.dim}${elapsed.padStart(5)}${c.reset}   ${c.gray}${desc}${c.reset}`);
+      const modelLabel = a.model === "opus" ? `${c.magenta}Opus${c.reset}` : a.model === "haiku" ? `${c.green}Haiku${c.reset}` : `${c.cyan}Sonnet${c.reset}`;
+      agentLines.push(`${c.slate800}${prefix}${c.reset} ${c.white}${type}${c.reset} ${modelLabel} ${c.slate600}${elapsed.padStart(5)}${c.reset}   ${c.slate600}${desc}${c.reset}`);
     }
   }
 
-  const output = agentLines.length > 0 ? mainLine + "\n" + agentLines.join("\n") : mainLine;
-  return output + "\n";
+  if (agentLines.length > 0) {
+    output += "\n" + agentLines.join("\n");
+  }
+
+  return output + blankLine + "\n";
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
@@ -575,7 +638,7 @@ async function main() {
     getLatestVersion(),
   ]);
 
-  console.log(render(usage, transcript, contextPct, modelId, version, latestVersion, stdin.cost));
+  console.log(render(usage, transcript, contextPct, modelId, version, latestVersion, stdin.cost, stdin));
 }
 
 main().catch((err) => {
