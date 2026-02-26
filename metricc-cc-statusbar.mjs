@@ -555,20 +555,12 @@ function calcRowWidth(cols) {
 }
 
 function getTermWidth() {
-  const sources = [];
-  // stdout.columns works when stdout is a TTY
-  if (process.stdout.columns) { sources.push(["stdout", process.stdout.columns]); return process.stdout.columns; }
-  // stderr stays connected to the TTY even when stdout is piped
-  if (process.stderr.columns) { sources.push(["stderr", process.stderr.columns]); return process.stderr.columns; }
-  // Fall back to tput which reads the controlling terminal
+  if (process.stdout.columns) return process.stdout.columns;
+  if (process.stderr.columns) return process.stderr.columns;
   try {
     const w = parseInt(execSync("tput cols", { encoding: "utf8", timeout: 500, stdio: ["inherit", "pipe", "pipe"] }).trim(), 10);
-    if (w > 0) { sources.push(["tput", w]); }
-  } catch(e) { sources.push(["tput-err", e.message]); }
-  // Debug: write to temp file so we can see what happened
-  try { writeFileSync(join(HOME, ".claude", "hud", ".termwidth-debug.log"), JSON.stringify({ ts: Date.now(), stdout: process.stdout.columns, stderr: process.stderr.columns, sources, isTTY_out: process.stdout.isTTY, isTTY_err: process.stderr.isTTY, env_COLUMNS: process.env.COLUMNS }, null, 2)); } catch {}
-  const tputVal = sources.find(s => s[0] === "tput");
-  if (tputVal) return tputVal[1];
+    if (w > 0) return w;
+  } catch { /* tput unavailable */ }
   return 220; // fail open — show everything
 }
 
@@ -723,9 +715,6 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
     const valueLen = stripAnsi(col.value).length;
     return Math.max(labelLen, valueLen);
   });
-
-  // DEBUG: write final column state to confirm this version is running
-  try { writeFileSync(join(HOME, ".claude", "hud", ".render-debug.log"), JSON.stringify({ ts: Date.now(), v: "SAFETY_DROP_V2", termWidth, colCount: columns.length, rowWidth: calcRowWidth(columns), labels: columns.map(col => stripAnsi(col.label)) }, null, 2)); } catch {}
 
   const labelRow = c.reset + columns.map((col, i) => padAnsi(col.label, colWidths[i])).join(` ${pipe} `) + c.reset;
   const valueRow = c.reset + columns.map((col, i) => padAnsi(col.value, colWidths[i])).join(` ${pipe} `) + c.reset;
