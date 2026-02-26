@@ -38,7 +38,7 @@ const ALL_COLUMNS = [
 ];
 
 const HOME = homedir();
-const CONFIG_PATH = join(HOME, ".claude", "hud", "config.json");
+const CONFIG_PATH = join(HOME, ".claude", "hud", "config.jsonc");
 const CACHE_PATH = join(HOME, ".claude", "hud", ".usage-cache.json");
 const VERSION_CACHE_PATH = join(HOME, ".claude", "hud", ".version-cache.json");
 const CRED_PATH = join(HOME, ".claude", ".credentials.json");
