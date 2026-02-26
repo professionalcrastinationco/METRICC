@@ -26,6 +26,7 @@ const STALE_AGENT_MS = 30 * 60_000;   // 30 min = stale agent
 const OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 
 const VERSION_CACHE_TTL_MS = 3_600_000; // 1hr cache for npm version check
+const RESPONSIVE_DROP_ORDER = ["Directory", "Session", "Changes", "Version"];
 
 const HOME = homedir();
 const CACHE_PATH = join(HOME, ".claude", "hud", ".usage-cache.json");
@@ -496,6 +497,27 @@ function padAnsi(str, width) {
   return str + " ".repeat(padding);
 }
 
+function calcRowWidth(cols) {
+  const widths = cols.map(col =>
+    Math.max(stripAnsi(col.label).length, stripAnsi(col.value).length)
+  );
+  if (widths.length === 0) return 0;
+  return widths.reduce((a, b) => a + b, 0) + (widths.length - 1) * 3;
+}
+
+function getTermWidth() {
+  // stdout.columns works when stdout is a TTY
+  if (process.stdout.columns) return process.stdout.columns;
+  // stderr stays connected to the TTY even when stdout is piped
+  if (process.stderr.columns) return process.stderr.columns;
+  // Fall back to tput which reads the controlling terminal
+  try {
+    const w = parseInt(execSync("tput cols", { encoding: "utf8", timeout: 500, stdio: ["inherit", "pipe", "pipe"] }).trim(), 10);
+    if (w > 0) return w;
+  } catch { /* */ }
+  return 220; // fail open — show everything
+}
+
 function render(usage, transcript, contextPct, modelId, version, latestVersion, cost, stdinData) {
   const pipe = `${c.slate800}│`;
 
@@ -557,6 +579,14 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
   const workDir = stdinData?.workspace?.current_dir;
   if (workDir) {
     columns.push({ label: `${c.slate800bold}Directory:${c.reset}`, value: `${c.slate600}${workDir}${c.reset}` });
+  }
+
+  // ── Drop low-priority segments if terminal is narrow ──
+  const termWidth = getTermWidth();
+  for (const dropLabel of RESPONSIVE_DROP_ORDER) {
+    if (calcRowWidth(columns) <= termWidth) break;
+    const idx = columns.findIndex(col => stripAnsi(col.label).startsWith(dropLabel));
+    if (idx !== -1) columns.splice(idx, 1);
   }
 
   // ── Calculate column widths and render rows ──
