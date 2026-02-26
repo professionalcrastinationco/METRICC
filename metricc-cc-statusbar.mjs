@@ -26,9 +26,19 @@ const STALE_AGENT_MS = 30 * 60_000;   // 30 min = stale agent
 const OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 
 const VERSION_CACHE_TTL_MS = 3_600_000; // 1hr cache for npm version check
-const RESPONSIVE_DROP_ORDER = ["Directory", "Session", "Changes", "Version"];
+const RESPONSIVE_DROP_ORDER = ["7d Reset", "5h Reset", "API Time", "Output Tokens", "Cache", "Tokens", "Directory", "Cost", "Session", "Changes", "Version"];
+
+const ALL_COLUMNS = [
+  // Standard
+  "5h Usage", "7d Usage", "Context", "Model", "Version",
+  // Session
+  "Session", "Changes", "Directory", "Cost",
+  // Advanced
+  "Tokens", "Output Tokens", "Cache", "API Time", "5h Reset", "7d Reset",
+];
 
 const HOME = homedir();
+const CONFIG_PATH = join(HOME, ".claude", "hud", "config.json");
 const CACHE_PATH = join(HOME, ".claude", "hud", ".usage-cache.json");
 const VERSION_CACHE_PATH = join(HOME, ".claude", "hud", ".version-cache.json");
 const CRED_PATH = join(HOME, ".claude", ".credentials.json");
@@ -55,6 +65,39 @@ const c = {
   slate800: "\x1b[38;2;51;65;85m",
   slate800bold: "\x1b[1;38;2;51;65;85m",
 };
+
+// ── Config ─────────────────────────────────────────────────────────────────────
+// Config file: ~/.claude/hud/config.json (supports // comments)
+// Toggle columns with true/false. Missing keys default to their section default.
+function parseJsonc(text) {
+  const stripped = text.replace(/^\s*\/\/.*$/gm, "").replace(/,(\s*[}\]])/g, "$1");
+  return JSON.parse(stripped);
+}
+
+const SECTION_DEFAULTS = {
+  // Standard: on by default
+  "5h Usage": true, "7d Usage": true, "Context": true, "Model": true, "Version": true,
+  // Session: off by default
+  "Session": false, "Changes": false, "Directory": false, "Cost": false,
+  // Advanced: off by default
+  "Tokens": false, "Output Tokens": false, "Cache": false, "API Time": false, "5h Reset": false, "7d Reset": false,
+};
+
+function readConfig() {
+  try {
+    if (!existsSync(CONFIG_PATH)) {
+      return { columns: ALL_COLUMNS.filter((id) => SECTION_DEFAULTS[id] !== false) };
+    }
+    const cfg = parseJsonc(readFileSync(CONFIG_PATH, "utf-8"));
+    const enabled = ALL_COLUMNS.filter((id) => {
+      if (id in cfg) return cfg[id] !== false;
+      return SECTION_DEFAULTS[id] !== false;
+    });
+    return { columns: enabled.length > 0 ? enabled : ALL_COLUMNS };
+  } catch {
+    return { columns: ALL_COLUMNS.filter((id) => SECTION_DEFAULTS[id] !== false) };
+  }
+}
 
 // ── Stdin Parser ───────────────────────────────────────────────────────────────
 async function readStdin() {
@@ -461,6 +504,12 @@ function formatDuration(ms) {
   return `${s}s`;
 }
 
+function formatTokens(n) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return `${n}`;
+}
+
 function colorForPercent(pct, warnAt = 70, critAt = 85) {
   if (pct >= critAt) return c.red;
   if (pct >= warnAt) return c.yellow;
@@ -506,85 +555,164 @@ function calcRowWidth(cols) {
 }
 
 function getTermWidth() {
+  const sources = [];
   // stdout.columns works when stdout is a TTY
-  if (process.stdout.columns) return process.stdout.columns;
+  if (process.stdout.columns) { sources.push(["stdout", process.stdout.columns]); return process.stdout.columns; }
   // stderr stays connected to the TTY even when stdout is piped
-  if (process.stderr.columns) return process.stderr.columns;
+  if (process.stderr.columns) { sources.push(["stderr", process.stderr.columns]); return process.stderr.columns; }
   // Fall back to tput which reads the controlling terminal
   try {
     const w = parseInt(execSync("tput cols", { encoding: "utf8", timeout: 500, stdio: ["inherit", "pipe", "pipe"] }).trim(), 10);
-    if (w > 0) return w;
-  } catch { /* */ }
+    if (w > 0) { sources.push(["tput", w]); }
+  } catch(e) { sources.push(["tput-err", e.message]); }
+  // Debug: write to temp file so we can see what happened
+  try { writeFileSync(join(HOME, ".claude", "hud", ".termwidth-debug.log"), JSON.stringify({ ts: Date.now(), stdout: process.stdout.columns, stderr: process.stderr.columns, sources, isTTY_out: process.stdout.isTTY, isTTY_err: process.stderr.isTTY, env_COLUMNS: process.env.COLUMNS }, null, 2)); } catch {}
+  const tputVal = sources.find(s => s[0] === "tput");
+  if (tputVal) return tputVal[1];
   return 220; // fail open — show everything
 }
 
-function render(usage, transcript, contextPct, modelId, version, latestVersion, cost, stdinData) {
+function render(usage, transcript, contextPct, modelId, version, latestVersion, cost, stdinData, config) {
   const pipe = `${c.slate800}│`;
+  const show = (id) => config.columns.includes(id);
 
   // ── Build columns: { label, value } ──
   const columns = [];
 
   // 5h rate limit
-  let fhValue, wkValue;
-  if (usage) {
-    const fhColor = colorForPercent(usage.fiveHour, 60, 80);
-    const wkColor = colorForPercent(usage.sevenDay, 60, 80);
-    const fhReset = formatResetTime(usage.fiveHourResets);
-    const wkReset = formatResetTime(usage.sevenDayResets);
-    fhValue = `${fhColor}${Math.round(usage.fiveHour)}%${c.reset}${fhReset ? ` ${fhReset}` : ""}`;
-    wkValue = `${wkColor}${Math.round(usage.sevenDay)}%${c.reset}${wkReset ? ` ${wkReset}` : ""}`;
-  } else {
-    fhValue = `${c.slate600}--${c.reset}`;
-    wkValue = `${c.slate600}--${c.reset}`;
+  if (show("5h Usage")) {
+    let fhValue;
+    if (usage) {
+      const fhColor = colorForPercent(usage.fiveHour, 60, 80);
+      const fhReset = formatResetTime(usage.fiveHourResets);
+      fhValue = `${fhColor}${Math.round(usage.fiveHour)}%${c.reset}${fhReset ? ` ${fhReset}` : ""}`;
+    } else {
+      fhValue = `${c.slate600}--${c.reset}`;
+    }
+    columns.push({ label: `${c.slate800bold}5h Usage:${c.reset}`, value: fhValue });
   }
-  columns.push({ label: `${c.slate800bold}5h Usage:${c.reset}`, value: fhValue });
-  columns.push({ label: `${c.slate800bold}7d Usage:${c.reset}`, value: wkValue });
+
+  // 7d rate limit
+  if (show("7d Usage")) {
+    let wkValue;
+    if (usage) {
+      const wkColor = colorForPercent(usage.sevenDay, 60, 80);
+      const wkReset = formatResetTime(usage.sevenDayResets);
+      wkValue = `${wkColor}${Math.round(usage.sevenDay)}%${c.reset}${wkReset ? ` ${wkReset}` : ""}`;
+    } else {
+      wkValue = `${c.slate600}--${c.reset}`;
+    }
+    columns.push({ label: `${c.slate800bold}7d Usage:${c.reset}`, value: wkValue });
+  }
 
   // Context
-  const ctxColor = colorForPercent(contextPct);
-  const ctxValue = `${ctxColor}${contextPct}%${c.reset} ${c.slate600}Used${c.reset}`;
-  columns.push({ label: `${c.slate800bold}Context:${c.reset}`, value: ctxValue });
+  if (show("Context")) {
+    const ctxColor = colorForPercent(contextPct);
+    const ctxValue = `${ctxColor}${contextPct}%${c.reset} ${c.slate600}Used${c.reset}`;
+    columns.push({ label: `${c.slate800bold}Context:${c.reset}`, value: ctxValue });
+  }
 
   // Changes
-  const added = cost?.total_lines_added ?? 0;
-  const removed = cost?.total_lines_removed ?? 0;
-  let chgValue;
-  if (added || removed) {
-    chgValue = `${c.green}+${added}${c.reset}${c.slate600}/${c.reset}${c.red}-${removed}${c.reset}`;
-  } else {
-    chgValue = `${c.slate600}+0/-0${c.reset}`;
+  if (show("Changes")) {
+    const added = cost?.total_lines_added ?? 0;
+    const removed = cost?.total_lines_removed ?? 0;
+    let chgValue;
+    if (added || removed) {
+      chgValue = `${c.green}+${added}${c.reset}${c.slate600}/${c.reset}${c.red}-${removed}${c.reset}`;
+    } else {
+      chgValue = `${c.slate600}+0/-0${c.reset}`;
+    }
+    columns.push({ label: `${c.slate800bold}Changes:${c.reset}`, value: chgValue });
   }
-  columns.push({ label: `${c.slate800bold}Changes:${c.reset}`, value: chgValue });
 
   // Session
-  const durationMs = cost?.total_duration_ms ?? 0;
-  if (durationMs > 0) {
-    columns.push({ label: `${c.slate800bold}Session:${c.reset}`, value: `${c.slate600}${formatDuration(durationMs)}${c.reset}` });
+  if (show("Session")) {
+    const durationMs = cost?.total_duration_ms ?? 0;
+    if (durationMs > 0) {
+      columns.push({ label: `${c.slate800bold}Session:${c.reset}`, value: `${c.slate600}${formatDuration(durationMs)}${c.reset}` });
+    }
   }
 
   // Model
-  columns.push({ label: `${c.slate800bold}Model:${c.reset}`, value: `${c.slate600}${modelId}${c.reset}` });
+  if (show("Model")) {
+    columns.push({ label: `${c.slate800bold}Model:${c.reset}`, value: `${c.slate600}${modelId}${c.reset}` });
+  }
 
   // Version
-  const displayVersion = version || latestVersion;
-  if (displayVersion) {
-    let versionStatus = "";
-    if (version && latestVersion && version !== latestVersion) {
-      versionStatus = ` ${c.yellow}(update avail)${c.reset}`;
+  if (show("Version")) {
+    const displayVersion = version || latestVersion;
+    if (displayVersion) {
+      const dot = (version && latestVersion && version !== latestVersion)
+        ? `${c.yellow}●${c.reset}` : `${c.green}●${c.reset}`;
+      columns.push({ label: `${c.slate800bold}Version:${c.reset}`, value: `${dot} ${c.slate600}v${displayVersion}${c.reset}` });
     }
-    columns.push({ label: `${c.slate800bold}Version:${c.reset}`, value: `${c.slate600}v${displayVersion}${c.reset}${versionStatus}` });
   }
 
   // Directory
-  const workDir = stdinData?.workspace?.current_dir;
-  if (workDir) {
-    columns.push({ label: `${c.slate800bold}Directory:${c.reset}`, value: `${c.slate600}${workDir}${c.reset}` });
+  if (show("Directory")) {
+    const workDir = stdinData?.workspace?.current_dir;
+    if (workDir) {
+      columns.push({ label: `${c.slate800bold}Directory:${c.reset}`, value: `${c.slate600}${workDir}${c.reset}` });
+    }
+  }
+
+  // Cost (session cost in USD)
+  if (show("Cost")) {
+    const usd = cost?.total_cost_usd ?? 0;
+    const costColor = usd >= 1 ? c.red : usd >= 0.25 ? c.yellow : c.green;
+    columns.push({ label: `${c.slate800bold}Cost:${c.reset}`, value: `${costColor}$${usd.toFixed(2)}${c.reset}` });
+  }
+
+  // Tokens (input tokens in current context)
+  if (show("Tokens")) {
+    const cu = stdinData?.context_window?.current_usage;
+    const total = (cu?.input_tokens ?? 0) + (cu?.cache_creation_input_tokens ?? 0) + (cu?.cache_read_input_tokens ?? 0);
+    columns.push({ label: `${c.slate800bold}Tokens:${c.reset}`, value: `${c.slate600}${formatTokens(total)}${c.reset}` });
+  }
+
+  // Output Tokens (cumulative output tokens across session)
+  if (show("Output Tokens")) {
+    const outTokens = stdinData?.context_window?.total_output_tokens ?? 0;
+    columns.push({ label: `${c.slate800bold}Out Tokens:${c.reset}`, value: `${c.slate600}${formatTokens(outTokens)}${c.reset}` });
+  }
+
+  // Cache (cache read vs total tokens)
+  if (show("Cache")) {
+    const cu = stdinData?.context_window?.current_usage;
+    const cacheRead = cu?.cache_read_input_tokens ?? 0;
+    const total = (cu?.input_tokens ?? 0) + (cu?.cache_creation_input_tokens ?? 0) + cacheRead;
+    const cachePct = total > 0 ? Math.round((cacheRead / total) * 100) : 0;
+    const cacheColor = cachePct >= 50 ? c.green : cachePct >= 20 ? c.yellow : c.slate600;
+    columns.push({ label: `${c.slate800bold}Cache:${c.reset}`, value: `${cacheColor}${cachePct}%${c.reset} ${c.slate600}hit${c.reset}` });
+  }
+
+  // API Time (time spent waiting for API responses)
+  if (show("API Time")) {
+    const apiMs = cost?.total_api_duration_ms ?? 0;
+    if (apiMs > 0) {
+      columns.push({ label: `${c.slate800bold}API Time:${c.reset}`, value: `${c.slate600}${formatDuration(apiMs)}${c.reset}` });
+    }
+  }
+
+  // 5h Reset (standalone countdown)
+  if (show("5h Reset")) {
+    const resetStr = usage?.fiveHourResets ? formatResetTime(usage.fiveHourResets) : `${c.slate600}--${c.reset}`;
+    columns.push({ label: `${c.slate800bold}5h Reset:${c.reset}`, value: resetStr || `${c.slate600}--${c.reset}` });
+  }
+
+  // 7d Reset (standalone countdown)
+  if (show("7d Reset")) {
+    const resetStr = usage?.sevenDayResets ? formatResetTime(usage.sevenDayResets) : `${c.slate600}--${c.reset}`;
+    columns.push({ label: `${c.slate800bold}7d Reset:${c.reset}`, value: resetStr || `${c.slate600}--${c.reset}` });
   }
 
   // ── Drop low-priority segments if terminal is narrow ──
-  const termWidth = getTermWidth();
+  // tput/mode con report wider than the actual Claude Code statusbar display area,
+  // so apply a 15% reduction to compensate for UI chrome and padding
+  const rawWidth = getTermWidth();
+  const termWidth = Math.floor(rawWidth * 0.85);
   for (const dropLabel of RESPONSIVE_DROP_ORDER) {
-    if (calcRowWidth(columns) <= termWidth) break;
+    if (calcRowWidth(columns) < termWidth) break;
     const idx = columns.findIndex(col => stripAnsi(col.label).startsWith(dropLabel));
     if (idx !== -1) columns.splice(idx, 1);
   }
@@ -595,6 +723,9 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
     const valueLen = stripAnsi(col.value).length;
     return Math.max(labelLen, valueLen);
   });
+
+  // DEBUG: write final column state to confirm this version is running
+  try { writeFileSync(join(HOME, ".claude", "hud", ".render-debug.log"), JSON.stringify({ ts: Date.now(), v: "SAFETY_DROP_V2", termWidth, colCount: columns.length, rowWidth: calcRowWidth(columns), labels: columns.map(col => stripAnsi(col.label)) }, null, 2)); } catch {}
 
   const labelRow = c.reset + columns.map((col, i) => padAnsi(col.label, colWidths[i])).join(` ${pipe} `) + c.reset;
   const valueRow = c.reset + columns.map((col, i) => padAnsi(col.value, colWidths[i])).join(` ${pipe} `) + c.reset;
@@ -657,6 +788,7 @@ async function main() {
     return;
   }
 
+  const config = readConfig();
   const contextPct = getContextPercent(stdin);
   const modelId = getModelId(stdin);
   const version = getVersion(stdin);
@@ -668,7 +800,7 @@ async function main() {
     getLatestVersion(),
   ]);
 
-  console.log(render(usage, transcript, contextPct, modelId, version, latestVersion, stdin.cost, stdin));
+  console.log(render(usage, transcript, contextPct, modelId, version, latestVersion, stdin.cost, stdin, config));
 }
 
 main().catch((err) => {
