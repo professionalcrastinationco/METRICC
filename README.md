@@ -105,10 +105,14 @@ Your Anthropic API usage across two windows: the **5-hour** rolling window and t
 
 The color changes automatically as you use more of your limit:
 
+Normal
+<img src="docs/images/seg-rate.png" alt="Rate Limits normal">
 
-Normal<img src="docs/images/seg-rate.png" alt="Rate Limits normal">
-Warning (60%+)<img src="docs/images/seg-rate-warn.png" alt="Rate Limits warning">
-Critical (80%+)<img src="docs/images/seg-rate-crit.png" alt="Rate Limits critical">
+Warning (60%+)
+<img src="docs/images/seg-rate-warn.png" alt="Rate Limits warning">
+
+Critical (80%+)
+<img src="docs/images/seg-rate-crit.png" alt="Rate Limits critical">
 
 
 <table><tr>
