@@ -96,12 +96,20 @@ The screenshots below show **zoomed-in views** of each segment. Where applicable
 Your Anthropic API usage across two windows: the **5-hour** rolling window and the **7-day** rolling window. The percentage shows how much of your limit you've used. The time in parentheses is a rough countdown until that window resets.
 
 **Old:**
+
 ![Rate Limits old](docs/images/seg-rate-old.png)
 
 **New:**
+
 ![Rate Limits new](docs/images/seg-rate-new.png)
 
 The color changes automatically as you use more of your limit:
+
+
+Normal<img src="docs/images/seg-rate.png" alt="Rate Limits normal">
+Warning (60%+)<img src="docs/images/seg-rate-warn.png" alt="Rate Limits warning">
+Critical (80%+)<img src="docs/images/seg-rate-crit.png" alt="Rate Limits critical">
+
 
 <table><tr>
 <td><strong>Normal</strong><br><img src="docs/images/seg-rate.png" alt="Rate Limits normal"></td>
