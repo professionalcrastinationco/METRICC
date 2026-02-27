@@ -16,9 +16,11 @@ No dependencies to install. Just one file.
 Same data. Same five columns. Look how much space the new layout saves.
 
 **Old:**
+
 ![Old layout](docs/images/comparison-old.png)
 
 **New:**
+
 ![New layout](docs/images/comparison-new.png)
 
 ---
