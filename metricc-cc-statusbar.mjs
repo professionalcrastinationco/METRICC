@@ -70,7 +70,10 @@ const c = {
 // Config file: ~/.claude/hud/config.json (supports // comments)
 // Toggle columns with true/false. Missing keys default to their section default.
 function parseJsonc(text) {
-  const stripped = text.replace(/^\s*\/\/.*$/gm, "").replace(/,(\s*[}\]])/g, "$1");
+  // Strip both full-line and inline comments, then trailing commas
+  const stripped = text
+    .replace(/("(?:[^"\\]|\\.)*")|\/\/.*/g, (m, str) => str || "")
+    .replace(/,(\s*[}\]])/g, "$1");
   return JSON.parse(stripped);
 }
 
@@ -86,16 +89,17 @@ const SECTION_DEFAULTS = {
 function readConfig() {
   try {
     if (!existsSync(CONFIG_PATH)) {
-      return { columns: ALL_COLUMNS.filter((id) => SECTION_DEFAULTS[id] !== false) };
+      return { columns: ALL_COLUMNS.filter((id) => SECTION_DEFAULTS[id] !== false), layout: "vertical" };
     }
     const cfg = parseJsonc(readFileSync(CONFIG_PATH, "utf-8"));
     const enabled = ALL_COLUMNS.filter((id) => {
       if (id in cfg) return cfg[id] !== false;
       return SECTION_DEFAULTS[id] !== false;
     });
-    return { columns: enabled.length > 0 ? enabled : ALL_COLUMNS };
+    const layout = cfg.layout === "horizontal" ? "horizontal" : "vertical";
+    return { columns: enabled.length > 0 ? enabled : ALL_COLUMNS, layout };
   } catch {
-    return { columns: ALL_COLUMNS.filter((id) => SECTION_DEFAULTS[id] !== false) };
+    return { columns: ALL_COLUMNS.filter((id) => SECTION_DEFAULTS[id] !== false), layout: "vertical" };
   }
 }
 
@@ -546,7 +550,16 @@ function padAnsi(str, width) {
   return str + " ".repeat(padding);
 }
 
-function calcRowWidth(cols) {
+function calcRowWidth(cols, layout = "vertical") {
+  if (layout === "horizontal") {
+    // Each cell is "label value", joined by " │ " (3 chars)
+    const cellWidths = cols.map(col =>
+      stripAnsi(col.label).length + 1 + stripAnsi(col.value).length
+    );
+    if (cellWidths.length === 0) return 0;
+    return cellWidths.reduce((a, b) => a + b, 0) + (cellWidths.length - 1) * 3;
+  }
+  // Vertical: max of label/value per column + separators
   const widths = cols.map(col =>
     Math.max(stripAnsi(col.label).length, stripAnsi(col.value).length)
   );
@@ -701,26 +714,33 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
   // ── Drop low-priority segments if terminal is narrow ──
   // tput/mode con report wider than the actual Claude Code statusbar display area,
   // so apply a 15% reduction to compensate for UI chrome and padding
+  const layout = config.layout || "vertical";
   const rawWidth = getTermWidth();
   const termWidth = Math.floor(rawWidth * 0.85);
   for (const dropLabel of RESPONSIVE_DROP_ORDER) {
-    if (calcRowWidth(columns) < termWidth) break;
+    if (calcRowWidth(columns, layout) < termWidth) break;
     const idx = columns.findIndex(col => stripAnsi(col.label).startsWith(dropLabel));
     if (idx !== -1) columns.splice(idx, 1);
   }
 
-  // ── Calculate column widths and render rows ──
-  const colWidths = columns.map((col) => {
-    const labelLen = stripAnsi(col.label).length;
-    const valueLen = stripAnsi(col.value).length;
-    return Math.max(labelLen, valueLen);
-  });
-
-  const labelRow = c.reset + columns.map((col, i) => padAnsi(col.label, colWidths[i])).join(` ${pipe} `) + c.reset;
-  const valueRow = c.reset + columns.map((col, i) => padAnsi(col.value, colWidths[i])).join(` ${pipe} `) + c.reset;
-
   const blankLine = `\n${c.reset}\u200B`;
-  let output = labelRow + "\n" + valueRow;
+  let output;
+
+  if (layout === "horizontal") {
+    // ── Horizontal: single row with "label value" cells ──
+    const hRow = c.reset + columns.map((col) => `${col.label} ${col.value}`).join(` ${pipe} `) + c.reset;
+    output = hRow;
+  } else {
+    // ── Vertical (default): labels on row 1, values on row 2 ──
+    const colWidths = columns.map((col) => {
+      const labelLen = stripAnsi(col.label).length;
+      const valueLen = stripAnsi(col.value).length;
+      return Math.max(labelLen, valueLen);
+    });
+    const labelRow = c.reset + columns.map((col, i) => padAnsi(col.label, colWidths[i])).join(` ${pipe} `) + c.reset;
+    const valueRow = c.reset + columns.map((col, i) => padAnsi(col.value, colWidths[i])).join(` ${pipe} `) + c.reset;
+    output = labelRow + "\n" + valueRow;
+  }
 
   // ── Line 3: Agents, Agent name, Todos (only if any exist) ──
   const line3 = [];
