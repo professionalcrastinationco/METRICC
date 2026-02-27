@@ -4,7 +4,7 @@
 
 ![](docs/images/hero.png)
 
-## ![](docs/images/icon-20px-layout-slate-500-regular.png) Choose Inline or Stacked
+## ![](docs/images/icon-20px-layout-red-500-regular.png) Choose Inline or Stacked
 
 Two layout modes. Same data. Pick whichever fits your workflow.
 
@@ -20,42 +20,42 @@ Set `"layout": "horizontal"` or `"layout": "vertical"` in your config file.
 
 ---
 
-## ![](docs/images/icon-20px-list-checks-slate-500-regular.png) Choose From 16 Stats
+## ![](docs/images/icon-20px-list-checks-orange-500-regular.png) Choose From 16 Stats
 
 ###### Rate Limits
- - ![](docs/images/icon-16px-percent-emerald-500-regular.png) 5-hour usage %
- - ![](docs/images/icon-16px-percent-emerald-500-regular.png) 7-day usage %
- - ![](docs/images/icon-16px-clock-countdown-amber-500-regular-flip-horizontal.png) 5-hour reset countdown
- - ![](docs/images/icon-16px-clock-countdown-amber-500-regular-flip-horizontal.png) 7-day reset countdown
+ - ![](docs/images/icon-16px-percent-slate-500-regular.png) 5-hour usage %
+ - ![](docs/images/icon-16px-percent-slate-500-regular.png) 7-day usage %
+ - ![](docs/images/icon-16px-clock-countdown-slate-500-regular-flip-horizontal.png) 5-hour reset countdown
+ - ![](docs/images/icon-16px-clock-countdown-slate-500-regular-flip-horizontal.png) 7-day reset countdown
 
 ###### Context & Tokens
- - ![](docs/images/icon-16px-percent-yellow-500-regular.png) Context window used
+ - ![](docs/images/icon-16px-percent-slate-500-regular.png) Context window used
  - ![](docs/images/icon-16px-code-slate-500-regular.png) Input tokens
  - ![](docs/images/icon-16px-code-slate-500-regular.png) Output tokens
- - ![](docs/images/icon-16px-percent-emerald-500-regular.png) Cache hit rate
+ - ![](docs/images/icon-16px-percent-slate-500-regular.png) Cache hit rate
 
 ###### Session Info
  - ![](docs/images/icon-16px-timer-slate-500-regular.png) Session duration
  - ![](docs/images/icon-16px-timer-slate-500-regular.png) API response time
- - ![](docs/images/icon-16px-git-diff-emerald-500-regular.png) Lines added / removed
+ - ![](docs/images/icon-16px-git-diff-slate-500-regular.png) Lines added / removed
  - ![](docs/images/icon-16px-folder-slate-500-regular.png) Working directory
- - ![](docs/images/icon-16px-currency-dollar-emerald-500-regular.png) Session cost (USD)
+ - ![](docs/images/icon-16px-currency-dollar-slate-500-regular.png) Session cost (USD)
 
 ###### Model & Version
  - ![](docs/images/icon-16px-cpu-slate-500-regular.png) Current model
- - ![](docs/images/icon-16px-flag-banner-sky-500-regular.png) Claude Code version
+ - ![](docs/images/icon-16px-flag-banner-slate-500-regular.png) Claude Code version
 
 ###### Auto (appear when active)
  - ![](docs/images/icon-16px-robot-slate-500-regular.png) Running agents + tree view
- - ![](docs/images/icon-16px-check-square-emerald-500-regular.png) Todo progress
+ - ![](docs/images/icon-16px-check-square-slate-500-regular.png) Todo progress
 
 ---
 
-## ![](docs/images/icon-20px-gear-six-slate-500-regular.png) Simple Config File
+## ![](docs/images/icon-20px-gear-six-amber-500-regular.png) Simple Config File
 
- - ![](docs/images/icon-16px-check-square-emerald-500-regular.png) Toggle any stat on or off
- - ![](docs/images/icon-16px-check-square-emerald-500-regular.png) Switch between horizontal and vertical layouts
- - ![](docs/images/icon-16px-check-square-emerald-500-regular.png) No restart required — changes apply on next render
+ - ![](docs/images/icon-16px-check-square-slate-500-regular.png) Toggle any stat on or off
+ - ![](docs/images/icon-16px-check-square-slate-500-regular.png) Switch between horizontal and vertical layouts
+ - ![](docs/images/icon-16px-check-square-slate-500-regular.png) No restart required — changes apply on next render
 
 ```jsonc
 {
@@ -70,42 +70,42 @@ Set `"layout": "horizontal"` or `"layout": "vertical"` in your config file.
 
 ---
 
-## ![](docs/images/icon-20px-palette-slate-500-regular.png) Modern Color Palette
+## ![](docs/images/icon-20px-palette-yellow-500-regular.png) Modern Color Palette
 
- - ![](docs/images/icon-16px-palette-red-600-regular.png) Removed boring ANSI color palette
- - ![](docs/images/icon-16px-palette-emerald-500-regular.png) Replaced with Tailwind CSS colors
+ - ![](docs/images/icon-16px-palette-slate-500-regular.png) Removed boring ANSI color palette
+ - ![](docs/images/icon-16px-palette-slate-500-regular.png) Replaced with Tailwind CSS colors
 
 | Color | Hex | Used For |
 |-------|-----|----------|
-| ![](docs/images/icon-16px-check-emerald-500-regular.png) Emerald-600 | `#059669` | Healthy / normal values |
-| ![](docs/images/icon-16px-clock-countdown-amber-500-regular-flip-horizontal.png) Amber-600 | `#d97706` | Warning thresholds |
-| ![](docs/images/icon-16px-clock-countdown-red-500-regular.png) Red-600 | `#dc2626` | Critical thresholds |
+| ![](docs/images/icon-16px-check-slate-500-regular.png) Emerald-600 | `#059669` | Healthy / normal values |
+| ![](docs/images/icon-16px-clock-countdown-slate-500-regular-flip-horizontal.png) Amber-600 | `#d97706` | Warning thresholds |
+| ![](docs/images/icon-16px-clock-countdown-slate-500-regular.png) Red-600 | `#dc2626` | Critical thresholds |
 | ![](docs/images/icon-16px-clock-countdown-slate-500-regular.png) Slate-700 | `#334155` | Labels and separators |
 | ![](docs/images/icon-16px-percent-slate-500-regular.png) Slate-600 | `#64748b` | Data values |
 
 ---
 
-## ![](docs/images/icon-20px-box-arrow-down-slate-500-regular.png) No Dependencies
+## ![](docs/images/icon-20px-box-arrow-down-lime-500-regular.png) No Dependencies
 
- - ![](docs/images/icon-16px-x-red-500-regular.png) Nothing to install
- - ![](docs/images/icon-16px-x-red-500-regular.png) No npm packages
- - ![](docs/images/icon-16px-x-red-500-regular.png) No tracking or telemetry
- - ![](docs/images/icon-16px-check-emerald-500-regular.png) Pure Node.js — uses your existing Claude Code session
+ - ![](docs/images/icon-16px-x-slate-500-regular.png) Nothing to install
+ - ![](docs/images/icon-16px-x-slate-500-regular.png) No npm packages
+ - ![](docs/images/icon-16px-x-slate-500-regular.png) No tracking or telemetry
+ - ![](docs/images/icon-16px-check-slate-500-regular.png) Pure Node.js — uses your existing Claude Code session
 
 ---
 
-## ![](docs/images/icon-20px-robot-slate-500-regular.png) Agents Row
+## ![](docs/images/icon-20px-robot-emerald-500-regular.png) Agents Row
 
- - ![](docs/images/icon-16px-check-emerald-500-regular.png) Only appears when agent(s) are active
- - ![](docs/images/icon-16px-check-emerald-500-regular.png) Shows which model each agent is using
- - ![](docs/images/icon-16px-check-emerald-500-regular.png) Shows what task each agent is performing
- - ![](docs/images/icon-16px-check-emerald-500-regular.png) Models are color-coded: **Opus** (purple), **Sonnet** (cyan), **Haiku** (green)
+ - ![](docs/images/icon-16px-check-slate-500-regular.png) Only appears when agent(s) are active
+ - ![](docs/images/icon-16px-check-slate-500-regular.png) Shows which model each agent is using
+ - ![](docs/images/icon-16px-check-slate-500-regular.png) Shows what task each agent is performing
+ - ![](docs/images/icon-16px-check-slate-500-regular.png) Models are color-coded: **Opus** (purple), **Sonnet** (cyan), **Haiku** (green)
 
 ![](docs/images/seg-agents.png)
 
 ---
 
-## ![](docs/images/icon-20px-paint-brush-slate-500-regular.png) Color-Coded Thresholds
+## ![](docs/images/icon-20px-paint-brush-teal-500-regular.png) Color-Coded Thresholds
 
 Values change color as they approach limits. Rate limits, context window, and cost all follow the same pattern:
 
@@ -119,7 +119,7 @@ Values change color as they approach limits. Rate limits, context window, and co
 
 ---
 
-## ![](docs/images/icon-20px-article-slate-500-regular.png) Segment Details
+## ![](docs/images/icon-20px-article-cyan-500-regular.png) Segment Details
 
 ###### Rate Limits — `5h Usage` and `7d Usage`
 
@@ -195,7 +195,7 @@ Agents and todos appear on a third row only when active. The agent tree shows ty
 
 ---
 
-## ![](docs/images/icon-20px-gear-six-slate-500-regular.png) Configuration
+## ![](docs/images/icon-20px-gear-six-sky-500-regular-config.png) Configuration
 
 METRICC is configurable via `~/.claude/hud/config.jsonc`. The file uses JSONC (JSON with comments).
 
@@ -238,7 +238,7 @@ METRICC is configurable via `~/.claude/hud/config.jsonc`. The file uses JSONC (J
 
 ---
 
-## ![](docs/images/icon-20px-arrows-in-line-vertical-slate-500-regular.png) Responsive Width
+## ![](docs/images/icon-20px-arrows-in-line-vertical-blue-500-regular.png) Responsive Width
 
 On narrow terminals, METRICC automatically drops columns to fit. It removes the least important segments first:
 
@@ -251,7 +251,7 @@ This happens automatically — no configuration needed.
 
 ---
 
-## ![](docs/images/icon-20px-rocket-launch-slate-500-regular.png) Setup
+## ![](docs/images/icon-20px-rocket-launch-indigo-500-regular.png) Setup
 
 Two steps: **save the file**, then **point Claude Code to it**.
 
@@ -405,7 +405,7 @@ Tokens are refreshed automatically when expired.
 
 ---
 
-## ![](docs/images/icon-20px-question-slate-500-regular.png) Why This Exists
+## ![](docs/images/icon-20px-question-violet-500-regular.png) Why This Exists
 
 There are already a hundred Claude Code status bars. Most of them look like someone threw a JSON object at a terminal and called it a day.
 
@@ -425,7 +425,7 @@ Claude Code wrote the code. I just refused to accept "good enough" approximately
 
 ---
 
-## ![](docs/images/icon-20px-handshake-slate-500-regular.png) Acknowledgments
+## ![](docs/images/icon-20px-handshake-pink-500-regular.png) Acknowledgments
 
 METRICC was inspired by the [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) framework. OMC is a multi-agent orchestration system for Claude Code — go check it out.
 
