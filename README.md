@@ -11,18 +11,25 @@ No dependencies to install. Just one file.
 
 ---
 
+## Before & After
+
+Same data. Same five columns. Look how much space the new layout saves.
+
+**Old:**
+![Old layout](docs/images/comparison-old.png)
+
+**New:**
+![New layout](docs/images/comparison-new.png)
+
+---
+
 ## What's New in v2
-
-The entire display has been redesigned from a single packed line into a **two-row column layout** with labels on top and data below. Everything is easier to scan, cleaner to look at, and shows more information without feeling cramped.
-
-[![Before and After comparison — click to view full-size](docs/images/comparison.png)](https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/docs/images/comparison.png)
-
-**What changed:**
 
 - **Two-row layout** — Labels sit above their values in aligned columns instead of everything crammed into one line
 - **Tailwind color palette** — Switched from basic ANSI colors to Tailwind's Emerald, Amber, and Red for status indicators, and Slate shades for labels and separators
-- **New: Session timer** — See how long your current session has been running
-- **New: Working directory** — Shows your current workspace path
+- **Configurable columns** — Toggle any segment on or off via `config.jsonc`. Show only what you care about
+- **Responsive width** — Columns auto-drop on narrow terminals, starting with the least important
+- **New segments** — Cost, Session timer, Directory, Tokens, Output Tokens, Cache hit rate, API Time, standalone reset countdowns
 - **Full model names in agents** — Agent tree now shows "Sonnet", "Opus", "Haiku" instead of single letters
 - **Cleaner reset times** — Shows `(~3h)` instead of `(3h05m)` — you don't need the minutes
 - **Third row** for agents and todos only appears when they're active — no wasted space
@@ -50,59 +57,111 @@ Claude Code wrote the code. I just refused to accept "good enough" approximately
 
 ---
 
+## Features at a Glance
+
+METRICC has 16 configurable segments across three sections. Standard segments are on by default; the rest are opt-in via `config.jsonc`.
+
+| Segment | Section | Default | Description |
+|---------|---------|---------|-------------|
+| 5h Usage | Standard | On | 5-hour rolling rate limit with reset countdown |
+| 7d Usage | Standard | On | 7-day rolling rate limit with reset countdown |
+| Context | Standard | On | Context window usage percentage |
+| Model | Standard | On | Current Claude model (Opus 4.6, Sonnet 4.5, etc.) |
+| Version | Standard | On | Claude Code version with update indicator dot |
+| Session | Session | Off | How long the current session has been running |
+| Changes | Session | Off | Lines added/removed this session |
+| Directory | Session | Off | Current workspace path |
+| Cost | Session | Off | Session cost in USD |
+| Tokens | Advanced | Off | Total input tokens in current context |
+| Output Tokens | Advanced | Off | Cumulative output tokens across session |
+| Cache | Advanced | Off | Cache read hit rate percentage |
+| API Time | Advanced | Off | Time spent waiting for API responses |
+| 5h Reset | Advanced | Off | Standalone 5-hour reset countdown |
+| 7d Reset | Advanced | Off | Standalone 7-day reset countdown |
+| Agents | Auto | Auto | Running agent count + tree (appears when active) |
+| Todos | Auto | Auto | Task progress (appears when active) |
+
+---
+
 ## What Each Piece Means
 
-The screenshots below are **zoomed-in views** of each segment. In the actual status bar, the top row shows labels and the bottom row shows values — all sitting side-by-side in aligned columns. A third row appears when agents or todos are active.
+The screenshots below show **zoomed-in views** of each segment. Where applicable, the old version is shown first so you can see the width difference — the new two-row layout is consistently narrower while showing more information.
 
 ---
 
 ### Rate Limits — `5h Usage` and `7d Usage`
 
-![Rate Limits](docs/images/seg-rate.png)
-
 Your Anthropic API usage across two windows: the **5-hour** rolling window and the **7-day** rolling window. The percentage shows how much of your limit you've used. The time in parentheses is a rough countdown until that window resets.
+
+**Old:**
+![Rate Limits old](docs/images/seg-rate-old.png)
+
+**New:**
+![Rate Limits new](docs/images/seg-rate-new.png)
 
 The color changes automatically as you use more of your limit:
 
-**Yellow** — getting close (60%+):
-
-![Rate Limits warning](docs/images/seg-rate-warn.png)
-
-**Red** — almost out (80%+):
-
-![Rate Limits critical](docs/images/seg-rate-crit.png)
+<table><tr>
+<td><strong>Normal</strong><br><img src="docs/images/seg-rate.png" alt="Rate Limits normal"></td>
+<td><strong>Warning (60%+)</strong><br><img src="docs/images/seg-rate-warn.png" alt="Rate Limits warning"></td>
+<td><strong>Critical (80%+)</strong><br><img src="docs/images/seg-rate-crit.png" alt="Rate Limits critical"></td>
+</tr></table>
 
 ---
 
 ### Context Window
 
-![Context Window](docs/images/seg-context.png)
+How full the current conversation's context window is. This is the amount of "memory" Claude has for this session.
 
-How full the current conversation's context window is. This is the amount of "memory" Claude has for this session. The same green/yellow/red color coding applies — it turns yellow at 70% and red at 85%.
+**Old:**
+![Context old](docs/images/seg-context-old.png)
+
+**New:**
+![Context new](docs/images/seg-context-new.png)
+
+The same green/yellow/red color coding applies — it turns yellow at 70% and red at 85%:
+
+<table><tr>
+<td><strong>Normal</strong><br><img src="docs/images/seg-context.png" alt="Context normal"></td>
+<td><strong>Warning (70%+)</strong><br><img src="docs/images/seg-context-warn.png" alt="Context warning"></td>
+<td><strong>Critical (85%+)</strong><br><img src="docs/images/seg-context-crit.png" alt="Context critical"></td>
+</tr></table>
 
 ---
 
 ### Code Changes
 
-![Code Changes](docs/images/seg-changes.png)
-
 Lines of code **added** (green) and **removed** (red) during this session. A quick way to gauge how much work has been done without running `git diff`.
+
+**Old:**
+![Changes old](docs/images/seg-changes-old.png)
+
+**New:**
+![Changes new](docs/images/seg-changes.png)
 
 ---
 
-### Session Timer
+### Model and Version
 
-![Session Timer](docs/images/seg-session.png)
+The Claude model you're currently using (Opus 4.6, Sonnet 4.5, Haiku 4.5, etc.) and your Claude Code version. A **green dot** means you're on the latest version. A **yellow dot** means an update is available.
 
-How long the current session has been running. Shows hours and minutes (e.g., `1h42m`) or minutes and seconds for shorter sessions.
+**Old:**
+![Model old](docs/images/seg-model-version-old.png)
+
+**New:**
+![Model new](docs/images/seg-model-version.png)
 
 ---
 
 ### Running Agents
 
-![Running Agents](docs/images/seg-agents.png)
+When Claude Code launches background agents (for research, exploration, etc.), they appear here. The count shows how many are active, and a tree view below the main bar shows details for each one.
 
-When Claude Code launches background agents (for research, exploration, etc.), they appear here. The count shows how many are active, and a tree view below the main bar shows details for each one:
+**Old:**
+![Agents old](docs/images/seg-agents-old.png)
+
+**New:**
+![Agents new](docs/images/seg-agents.png)
 
 - The model name is color-coded — **Sonnet** (cyan), **Opus** (purple), **Haiku** (green)
 - How long the agent has been running
@@ -114,25 +173,100 @@ Agents that have been running for over 30 minutes are automatically marked as st
 
 ### Todo Progress
 
-![Todo Progress](docs/images/seg-todos.png)
-
 When Claude Code is tracking tasks (via `TodoWrite` or `TaskCreate`), this shows how many are done out of the total. Yellow means there's still work to do — it turns green when all tasks are complete.
 
+**Old:**
+![Todos old](docs/images/seg-todos-old.png)
+
+**New:**
+![Todos new](docs/images/seg-todos.png)
+
+**Complete:**
+![Todos complete](docs/images/seg-todos-done.png)
+
 ---
 
-### Model and Version
+### Session Timer *(new in v2)*
 
-![Model and Version](docs/images/seg-model-version.png)
+![Session Timer](docs/images/seg-session.png)
 
-The Claude model you're currently using (Opus 4.6, Sonnet 4.5, Haiku 4.5, etc.) and your Claude Code version. If a newer version is available, you'll see **(update avail)** in yellow.
+How long the current session has been running. Shows hours and minutes (e.g., `1h42m`) or minutes and seconds for shorter sessions.
 
 ---
 
-### Working Directory
+### Cost *(new in v2)*
+
+Session cost in USD. Color-coded by spend:
+
+<table><tr>
+<td><strong>Normal (&lt;$0.25)</strong><br><img src="docs/images/seg-cost.png" alt="Cost normal"></td>
+<td><strong>Warning ($0.25–$1)</strong><br><img src="docs/images/seg-cost-warn.png" alt="Cost warning"></td>
+<td><strong>High ($1+)</strong><br><img src="docs/images/seg-cost-high.png" alt="Cost high"></td>
+</tr></table>
+
+---
+
+### Working Directory *(new in v2)*
 
 ![Working Directory](docs/images/seg-directory.png)
 
 The current workspace directory Claude Code is operating in.
+
+---
+
+## Configuration
+
+METRICC is configurable via `~/.claude/hud/config.jsonc`. This file controls which columns appear in your status bar.
+
+The file uses JSONC format (JSON with comments), so you can annotate your choices:
+
+```jsonc
+{
+  // ── Standard (on by default) ──
+  "5h Usage": true,
+  "7d Usage": true,
+  "Context": true,
+  "Model": true,
+  "Version": true,
+
+  // ── Session (off by default) ──
+  "Session": false,
+  "Changes": true,     // I like seeing line counts
+  "Directory": false,
+  "Cost": true,
+
+  // ── Advanced (off by default) ──
+  "Tokens": false,
+  "Output Tokens": false,
+  "Cache": false,
+  "API Time": false,
+  "5h Reset": false,
+  "7d Reset": false
+}
+```
+
+**Rules:**
+
+- Set a column to `true` to show it, `false` to hide it
+- Missing keys fall back to their section default (Standard = on, Session/Advanced = off)
+- If the file doesn't exist, you get the 5 Standard columns
+- The file is read every render — no restart needed after editing
+
+> **Tip:** You can ask Claude Code to edit this file for you:
+> *"Turn on the Cost and Session columns in my HUD config"*
+
+---
+
+## Responsive Width
+
+On narrow terminals, METRICC automatically drops columns to fit. It removes the least important segments first:
+
+1. Advanced columns drop first (7d Reset, 5h Reset, API Time, etc.)
+2. Then Session columns (Directory, Cost, Session, Changes)
+3. Then Version from Standard
+4. Standard columns (5h/7d Usage, Context, Model) are kept as long as possible
+
+This happens automatically — no configuration needed. On wide terminals, everything you've enabled will show.
 
 ---
 
@@ -318,8 +452,9 @@ The HUD uses Tailwind CSS colors for consistent, readable status indicators:
 | Green | Emerald-600 `#059669` | Normal / healthy values |
 | Yellow | Amber-600 `#d97706` | Warning thresholds |
 | Red | Red-600 `#dc2626` | Critical thresholds |
-| Labels | Slate-800 `#1e293b` | Column headers |
-| Values | Slate-600 `#475569` | Neutral data |
+| Labels | Slate-700 `#334155` | Column headers (bold) |
+| Values | Slate-600 `#64748b` | Neutral data |
+| Separators | Slate-700 `#334155` | Pipe `│` between columns |
 
 ### Agent Tracking
 

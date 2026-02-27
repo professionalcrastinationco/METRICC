@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>METRICC v2 — HUD Mockups</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #0d1117;
+            padding: 80px 60px;
+            display: flex;
+            flex-direction: column;
+            gap: 80px;
+        }
+
+        .scenario { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+
+        .label {
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: #484f58;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
+        /* Terminal status line block */
+        .hud {
+            background: #1e1e1e;
+            font-family: "Cascadia Code", "Cascadia Mono", "Fira Code", Consolas, "Courier New", monospace;
+            font-size: 18px;
+            line-height: 1.6;
+            padding: 18px 28px;
+            border-radius: 10px;
+            white-space: pre;
+            display: inline-block;
+            color: #cccccc;
+        }
+
+        /* ── Tailwind-matched ANSI color classes ── */
+
+        /* Labels: Slate-700 bold (#334155) */
+        .lb { color: #334155; font-weight: bold; }
+
+        /* Values: Slate-600 (#64748b) */
+        .vl { color: #64748b; }
+
+        /* Separators: Slate-700 (#334155) — pipe │ */
+        .sp { color: #334155; }
+
+        /* Green: Emerald-600 (#059669) */
+        .gn { color: #059669; }
+
+        /* Yellow: Amber-600 (#d97706) */
+        .yw { color: #d97706; }
+
+        /* Red: Red-600 (#dc2626) */
+        .rd { color: #dc2626; }
+
+        /* Cyan: ANSI 36 — VS Code default dark terminal */
+        .cy { color: #11a8cd; }
+
+        /* Magenta: ANSI 35 — VS Code default dark terminal */
+        .mg { color: #bc3fbc; }
+
+        /* White: ANSI 37 — VS Code default dark terminal */
+        .wh { color: #e5e5e5; }
+
+        /* ── OLD v1 style colors (standard ANSI on VS Code dark) ── */
+        .old-gray  { color: #666666; }  /* ANSI 90 bright black */
+        .old-dim   { color: #666666; }  /* ANSI 2 dim */
+        .old-green { color: #23d18b; }  /* ANSI 32 green */
+        .old-yellow{ color: #f5f543; }  /* ANSI 33 yellow */
+        .old-red   { color: #cd3131; }  /* ANSI 31 red */
+        .old-cyan  { color: #11a8cd; }  /* ANSI 36 cyan */
+        .old-mag   { color: #bc3fbc; }  /* ANSI 35 magenta */
+        .old-white { color: #e5e5e5; }  /* ANSI 37 white */
+
+        /* Section divider */
+        .section-divider {
+            width: 100%;
+            border-top: 1px solid #21262d;
+            margin: 20px 0;
+        }
+
+        h2.section-title {
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: #58a6ff;
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- BEFORE / AFTER COMPARISON — 1:1 same data, same 5 columns                -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+
+<h2 class="section-title">Before &amp; After</h2>
+
+<div class="scenario">
+    <div class="label">Comparison — Old (same 5 columns)</div>
+    <div class="hud" id="comparison-old"><span class="old-gray">5h:</span> <span class="old-green">10%</span> <span class="old-dim">(3h05m)</span> <span class="old-dim">|</span> <span class="old-gray">7d:</span> <span class="old-green">11%</span> <span class="old-dim">(98h05m)</span> <span class="old-dim">|</span> <span class="old-gray">Context:</span> <span class="old-green">22%</span> <span class="old-dim">|</span> <span class="old-dim">Opus 4.6</span> <span class="old-dim">|</span> <span class="old-dim">CC v2.1.37</span></div>
+</div>
+
+<div class="scenario">
+    <div class="label">Comparison — New (same 5 columns)</div>
+    <div class="hud" id="comparison-new"><span class="lb">5h Usage:</span>  <span class="sp">│</span> <span class="lb">7d Usage:</span>  <span class="sp">│</span> <span class="lb">Context:</span> <span class="sp">│</span> <span class="lb">Model:</span>    <span class="sp">│</span> <span class="lb">Version:</span>
+<span class="gn">10%</span> <span class="vl">(~3h)</span>  <span class="sp">│</span> <span class="gn">11%</span> <span class="vl">(~98h)</span> <span class="sp">│</span> <span class="gn">22%</span> <span class="vl">Used</span> <span class="sp">│</span> <span class="vl">Opus 4.6</span>  <span class="sp">│</span> <span class="gn">●</span> <span class="vl">v2.1.37</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- INDIVIDUAL SEGMENTS — side-by-side old/new                                -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+
+<div class="section-divider"></div>
+<h2 class="section-title">Individual Segments — Old vs New</h2>
+
+<!-- Rate Limits: 3 states in a row (normal, warning, critical) -->
+<div class="scenario">
+    <div class="label">Rate Limits — Normal / Warning / Critical</div>
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+        <div class="hud" id="seg-rate"><span class="lb">5h Usage:</span>  <span class="sp">│</span> <span class="lb">7d Usage:</span>
+<span class="gn">10%</span> <span class="vl">(~3h)</span>  <span class="sp">│</span> <span class="gn">11%</span> <span class="vl">(~98h)</span></div>
+        <div class="hud" id="seg-rate-warn"><span class="lb">5h Usage:</span>  <span class="sp">│</span> <span class="lb">7d Usage:</span>
+<span class="yw">72%</span> <span class="vl">(~1h)</span>  <span class="sp">│</span> <span class="yw">61%</span> <span class="vl">(~52h)</span></div>
+        <div class="hud" id="seg-rate-crit"><span class="lb">5h Usage:</span>  <span class="sp">│</span> <span class="lb">7d Usage:</span>
+<span class="rd">91%</span> <span class="vl">(~0h)</span>  <span class="sp">│</span> <span class="rd">87%</span> <span class="vl">(~22h)</span></div>
+    </div>
+</div>
+
+<div class="scenario">
+    <div class="label">Rate Limits — Old vs New</div>
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+        <div>
+            <div class="label" style="margin-bottom: 6px;">OLD</div>
+            <div class="hud" id="seg-rate-old"><span class="old-gray">5h:</span> <span class="old-green">10%</span> <span class="old-dim">(3h05m)</span> <span class="old-dim">|</span> <span class="old-gray">7d:</span> <span class="old-green">11%</span> <span class="old-dim">(98h05m)</span></div>
+        </div>
+        <div>
+            <div class="label" style="margin-bottom: 6px;">NEW</div>
+            <div class="hud" id="seg-rate-new"><span class="lb">5h Usage:</span>  <span class="sp">│</span> <span class="lb">7d Usage:</span>
+<span class="gn">10%</span> <span class="vl">(~3h)</span>  <span class="sp">│</span> <span class="gn">11%</span> <span class="vl">(~98h)</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- Context: 3 states in a row -->
+<div class="scenario">
+    <div class="label">Context — Normal / Warning / Critical</div>
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+        <div class="hud" id="seg-context"><span class="lb">Context:</span>
+<span class="gn">22%</span> <span class="vl">Used</span></div>
+        <div class="hud" id="seg-context-warn"><span class="lb">Context:</span>
+<span class="yw">78%</span> <span class="vl">Used</span></div>
+        <div class="hud" id="seg-context-crit"><span class="lb">Context:</span>
+<span class="rd">94%</span> <span class="vl">Used</span></div>
+    </div>
+</div>
+
+<div class="scenario">
+    <div class="label">Context — Old vs New</div>
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+        <div>
+            <div class="label" style="margin-bottom: 6px;">OLD</div>
+            <div class="hud" id="seg-context-old"><span class="old-gray">Context:</span> <span class="old-green">22%</span></div>
+        </div>
+        <div>
+            <div class="label" style="margin-bottom: 6px;">NEW</div>
+            <div class="hud" id="seg-context-new"><span class="lb">Context:</span>
+<span class="gn">22%</span> <span class="vl">Used</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- Changes: old vs new -->
+<div class="scenario">
+    <div class="label">Code Changes — Old vs New</div>
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+        <div>
+            <div class="label" style="margin-bottom: 6px;">OLD</div>
+            <div class="hud" id="seg-changes-old"><span class="old-gray">Changes:</span> <span class="old-green">+7274</span><span class="old-dim">/</span><span class="old-red">-293</span></div>
+        </div>
+        <div>
+            <div class="label" style="margin-bottom: 6px;">NEW</div>
+            <div class="hud" id="seg-changes"><span class="lb">Changes:</span>
+<span class="gn">+7274</span><span class="vl">/</span><span class="rd">-293</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- Model + Version: old vs new -->
+<div class="scenario">
+    <div class="label">Model + Version — Old vs New</div>
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+        <div>
+            <div class="label" style="margin-bottom: 6px;">OLD</div>
+            <div class="hud" id="seg-model-version-old"><span class="old-dim">Opus 4.6</span> <span class="old-dim">|</span> <span class="old-dim">CC v2.1.34</span> <span class="old-yellow">(update avail)</span></div>
+        </div>
+        <div>
+            <div class="label" style="margin-bottom: 6px;">NEW</div>
+            <div class="hud" id="seg-model-version"><span class="lb">Model:</span>    <span class="sp">│</span> <span class="lb">Version:</span>
+<span class="vl">Opus 4.6</span>  <span class="sp">│</span> <span class="yw">●</span> <span class="vl">v2.1.34</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- Agents: old vs new -->
+<div class="scenario">
+    <div class="label">Agents — Old vs New</div>
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+        <div>
+            <div class="label" style="margin-bottom: 6px;">OLD</div>
+            <div class="hud" id="seg-agents-old"><span class="old-gray">Agents:</span> <span class="old-cyan">3</span>
+<span class="old-dim">├─</span> <span class="old-cyan">s</span> <span class="old-white">Explore       </span> <span class="old-dim">   9s</span>   <span class="old-gray">Explore auth &amp; user model</span>
+<span class="old-dim">├─</span> <span class="old-cyan">s</span> <span class="old-white">Explore       </span> <span class="old-dim">   5s</span>   <span class="old-gray">Explore frontend structure</span>
+<span class="old-dim">└─</span> <span class="old-mag">O</span> <span class="old-white">general-purpos</span> <span class="old-dim">2m30s</span>   <span class="old-gray">Researching deployment config</span></div>
+        </div>
+        <div>
+            <div class="label" style="margin-bottom: 6px;">NEW</div>
+            <div class="hud" id="seg-agents"><span class="lb">Agents:</span> <span class="cy">3</span>
+<span class="sp">├─</span> <span class="wh">Explore       </span> <span class="cy">Sonnet</span> <span class="vl">   9s</span>   <span class="vl">Explore auth &amp; user model</span>
+<span class="sp">├─</span> <span class="wh">Explore       </span> <span class="cy">Sonnet</span> <span class="vl">   5s</span>   <span class="vl">Explore frontend structure</span>
+<span class="sp">└─</span> <span class="wh">general-purpo</span> <span class="mg">Opus</span>   <span class="vl"> 2m30s</span>   <span class="vl">Researching deployment config</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- Todos: old vs new, 2 states -->
+<div class="scenario">
+    <div class="label">Todos — Old vs New (in progress / complete)</div>
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+        <div>
+            <div class="label" style="margin-bottom: 6px;">OLD</div>
+            <div class="hud" id="seg-todos-old"><span class="old-gray">Todos:</span> <span class="old-yellow">5/8</span></div>
+        </div>
+        <div>
+            <div class="label" style="margin-bottom: 6px;">NEW — IN PROGRESS</div>
+            <div class="hud" id="seg-todos"><span class="lb">Todos:</span> <span class="yw">5/8</span></div>
+        </div>
+        <div>
+            <div class="label" style="margin-bottom: 6px;">NEW — COMPLETE</div>
+            <div class="hud" id="seg-todos-done"><span class="lb">Todos:</span> <span class="gn">8/8</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- Session: new only (didn't exist in v1) -->
+<div class="scenario">
+    <div class="label">Session Timer (new in v2)</div>
+    <div class="hud" id="seg-session"><span class="lb">Session:</span>
+<span class="vl">1h42m</span></div>
+</div>
+
+<!-- Cost: 3 states in a row (new in v2) -->
+<div class="scenario">
+    <div class="label">Cost — Normal / Warning / High (new in v2)</div>
+    <div style="display: flex; gap: 16px; align-items: flex-start;">
+        <div class="hud" id="seg-cost"><span class="lb">Cost:</span>
+<span class="gn">$0.12</span></div>
+        <div class="hud" id="seg-cost-warn"><span class="lb">Cost:</span>
+<span class="yw">$0.48</span></div>
+        <div class="hud" id="seg-cost-high"><span class="lb">Cost:</span>
+<span class="rd">$1.73</span></div>
+    </div>
+</div>
+
+<!-- Directory: new only -->
+<div class="scenario">
+    <div class="label">Working Directory (new in v2)</div>
+    <div class="hud" id="seg-directory"><span class="lb">Directory:</span>
+<span class="vl">/home/user/projects/my-app</span></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+<!-- FULL BAR SCENARIOS                                                        -->
+<!-- ═══════════════════════════════════════════════════════════════════════════ -->
+
+<div class="section-divider"></div>
+<h2 class="section-title">Full Bar Scenarios</h2>
+
+<div class="scenario">
+    <div class="label">Standard columns (default 5)</div>
+    <div class="hud" id="hero"><span class="lb">5h Usage:</span>  <span class="sp">│</span> <span class="lb">7d Usage:</span>  <span class="sp">│</span> <span class="lb">Context:</span> <span class="sp">│</span> <span class="lb">Model:</span>    <span class="sp">│</span> <span class="lb">Version:</span>
+<span class="gn">10%</span> <span class="vl">(~3h)</span>  <span class="sp">│</span> <span class="gn">11%</span> <span class="vl">(~98h)</span> <span class="sp">│</span> <span class="gn">22%</span> <span class="vl">Used</span> <span class="sp">│</span> <span class="vl">Opus 4.6</span>  <span class="sp">│</span> <span class="gn">●</span> <span class="vl">v2.1.37</span></div>
+</div>
+
+<div class="scenario">
+    <div class="label">Standard + Session columns</div>
+    <div class="hud" id="hero-session"><span class="lb">5h Usage:</span>  <span class="sp">│</span> <span class="lb">7d Usage:</span>  <span class="sp">│</span> <span class="lb">Context:</span> <span class="sp">│</span> <span class="lb">Changes:</span>      <span class="sp">│</span> <span class="lb">Session:</span> <span class="sp">│</span> <span class="lb">Model:</span>    <span class="sp">│</span> <span class="lb">Version:</span>  <span class="sp">│</span> <span class="lb">Cost:</span>
+<span class="gn">10%</span> <span class="vl">(~3h)</span>  <span class="sp">│</span> <span class="gn">11%</span> <span class="vl">(~98h)</span> <span class="sp">│</span> <span class="gn">22%</span> <span class="vl">Used</span> <span class="sp">│</span> <span class="gn">+7274</span><span class="vl">/</span><span class="rd">-293</span>   <span class="sp">│</span> <span class="vl">1h42m</span>    <span class="sp">│</span> <span class="vl">Opus 4.6</span>  <span class="sp">│</span> <span class="gn">●</span> <span class="vl">v2.1.37</span>   <span class="sp">│</span> <span class="gn">$0.35</span></div>
+</div>
+
+<div class="scenario">
+    <div class="label">Full bar with agents running</div>
+    <div class="hud" id="hero-agents"><span class="lb">5h Usage:</span>  <span class="sp">│</span> <span class="lb">7d Usage:</span>  <span class="sp">│</span> <span class="lb">Context:</span> <span class="sp">│</span> <span class="lb">Model:</span>    <span class="sp">│</span> <span class="lb">Version:</span>
+<span class="gn">10%</span> <span class="vl">(~3h)</span>  <span class="sp">│</span> <span class="gn">11%</span> <span class="vl">(~98h)</span> <span class="sp">│</span> <span class="gn">22%</span> <span class="vl">Used</span> <span class="sp">│</span> <span class="vl">Opus 4.6</span>  <span class="sp">│</span> <span class="gn">●</span> <span class="vl">v2.1.37</span>
+
+<span class="lb">Agents:</span> <span class="cy">3</span> <span class="sp">│</span> <span class="lb">Todos:</span> <span class="yw">5/8</span>
+<span class="sp">├─</span> <span class="wh">Explore       </span> <span class="cy">Sonnet</span> <span class="vl">   9s</span>   <span class="vl">Explore auth &amp; user model</span>
+<span class="sp">├─</span> <span class="wh">Explore       </span> <span class="cy">Sonnet</span> <span class="vl">   5s</span>   <span class="vl">Explore frontend structure</span>
+<span class="sp">└─</span> <span class="wh">general-purpo</span> <span class="mg">Opus</span>   <span class="vl"> 2m30s</span>   <span class="vl">Researching deployment config</span></div>
+</div>
+
+<div class="scenario">
+    <div class="label">Heavy session — warning thresholds</div>
+    <div class="hud" id="hero-warn"><span class="lb">5h Usage:</span>  <span class="sp">│</span> <span class="lb">7d Usage:</span>  <span class="sp">│</span> <span class="lb">Context:</span> <span class="sp">│</span> <span class="lb">Model:</span>      <span class="sp">│</span> <span class="lb">Version:</span>
+<span class="yw">72%</span> <span class="vl">(~1h)</span>  <span class="sp">│</span> <span class="yw">61%</span> <span class="vl">(~52h)</span> <span class="sp">│</span> <span class="yw">78%</span> <span class="vl">Used</span> <span class="sp">│</span> <span class="vl">Sonnet 4.5</span>  <span class="sp">│</span> <span class="gn">●</span> <span class="vl">v2.1.37</span>
+
+<span class="lb">Todos:</span> <span class="yw">8/12</span></div>
+</div>
+
+<div class="scenario">
+    <div class="label">Near limit — critical thresholds</div>
+    <div class="hud" id="hero-crit"><span class="lb">5h Usage:</span>  <span class="sp">│</span> <span class="lb">7d Usage:</span>  <span class="sp">│</span> <span class="lb">Context:</span> <span class="sp">│</span> <span class="lb">Model:</span>    <span class="sp">│</span> <span class="lb">Version:</span>
+<span class="rd">91%</span> <span class="vl">(~0h)</span>  <span class="sp">│</span> <span class="rd">87%</span> <span class="vl">(~22h)</span> <span class="sp">│</span> <span class="rd">94%</span> <span class="vl">Used</span> <span class="sp">│</span> <span class="vl">Opus 4.6</span>  <span class="sp">│</span> <span class="gn">●</span> <span class="vl">v2.1.37</span>
+
+<span class="lb">Agents:</span> <span class="cy">1</span> <span class="sp">│</span> <span class="lb">Todos:</span> <span class="yw">11/12</span>
+<span class="sp">└─</span> <span class="wh">general-purpo</span> <span class="mg">Opus</span>   <span class="vl"> 2m30s</span>   <span class="vl">Researching deployment config</span></div>
+</div>
+
+</body>
+</html>
