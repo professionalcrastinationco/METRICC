@@ -1,18 +1,25 @@
 {
+  // "vertical" = labels above values, "horizontal" = single row
   "layout": "vertical",
-  "5h Usage": true,
-  "7d Usage": true,
-  "Context": true,
-  "Model": true,
-  "Version": true,
-  "Session": false,
-  "Changes": false,
-  "Directory": false,
-  "Cost": false,
-  "Tokens": false,
-  "Output Tokens": false,
-  "Cache": false,
-  "API Time": false,
-  "5h Reset": false,
-  "7d Reset": false
+
+  // --- Standard (on by default) ---
+  "5h Usage": true,      // 5-hour rolling rate-limit utilization %
+  "7d Usage": true,      // 7-day rolling rate-limit utilization %
+  "Context": true,       // Context window usage %
+  "Model": true,         // Active Claude model name
+  "Version": true,       // Installed version vs latest available
+
+  // --- Session (off by default) ---
+  "Session": false,      // How long this conversation has been running
+  "Changes": false,      // Lines added/removed this session
+  "Directory": false,    // Current working directory
+  "Cost": false,         // Estimated session cost in USD
+
+  // --- Advanced (off by default) ---
+  "Tokens": false,       // Total input tokens in context window
+  "Output Tokens": false,// Cumulative output tokens this session
+  "Cache": false,        // Prompt cache hit rate %
+  "API Time": false,     // Time spent waiting for API responses
+  "5h Reset": false,     // Countdown to 5-hour rate-limit reset
+  "7d Reset": false      // Countdown to 7-day rate-limit reset
 }
