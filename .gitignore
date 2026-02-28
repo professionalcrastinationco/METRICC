@@ -1,6 +1,10 @@
 # Windows artifacts
 nul
 
+# Dev Files
+.0
+HANDOFF.md
+
 # Cache
 .usage-cache.json
 
