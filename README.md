@@ -194,6 +194,20 @@ Edit `~/.claude/hud/config.jsonc` to toggle any stat on or off:
 
 ---
 
+## ![](docs/images/icon-20px-question-violet-500-regular.png) FAQ
+
+**All I see is the labels, no values** — [#4](https://github.com/professionalcrastinationco/METRICC/issues/4)
+
+You probably have more stats set to display than the width of your terminal window can support. We're working on making this more responsive. For now, the fix is to set some of the stats you can go without viewing to `false` in your `config.jsonc` file.
+
+---
+
+## ![](docs/images/icon-20px-list-checks-orange-500-regular.png) Known Bugs
+
+ - **The first label color gets darker randomly** — [#3](https://github.com/professionalcrastinationco/METRICC/issues/3)
+
+---
+
 ## ![](docs/images/icon-20px-handshake-pink-500-regular.png) Acknowledgments
 
 METRICC was inspired by the [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) framework.
