@@ -26,7 +26,6 @@ const STALE_AGENT_MS = 30 * 60_000;   // 30 min = stale agent
 const OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 
 const VERSION_CACHE_TTL_MS = 3_600_000; // 1hr cache for npm version check
-const RESPONSIVE_DROP_ORDER = ["7d Reset", "5h Reset", "API Time", "Output Tokens", "Cache", "Tokens", "Directory", "Cost", "Session", "Changes", "Version"];
 
 const ALL_COLUMNS = [
   // Standard
@@ -550,32 +549,7 @@ function padAnsi(str, width) {
   return str + " ".repeat(padding);
 }
 
-function calcRowWidth(cols, layout = "vertical") {
-  if (layout === "horizontal") {
-    // Each cell is "label value", joined by " │ " (3 chars)
-    const cellWidths = cols.map(col =>
-      stripAnsi(col.label).length + 1 + stripAnsi(col.value).length
-    );
-    if (cellWidths.length === 0) return 0;
-    return cellWidths.reduce((a, b) => a + b, 0) + (cellWidths.length - 1) * 3;
-  }
-  // Vertical: max of label/value per column + separators
-  const widths = cols.map(col =>
-    Math.max(stripAnsi(col.label).length, stripAnsi(col.value).length)
-  );
-  if (widths.length === 0) return 0;
-  return widths.reduce((a, b) => a + b, 0) + (widths.length - 1) * 3;
-}
 
-function getTermWidth() {
-  if (process.stdout.columns) return process.stdout.columns;
-  if (process.stderr.columns) return process.stderr.columns;
-  try {
-    const w = parseInt(execSync("tput cols", { encoding: "utf8", timeout: 500, stdio: ["inherit", "pipe", "pipe"] }).trim(), 10);
-    if (w > 0) return w;
-  } catch { /* tput unavailable */ }
-  return 220; // fail open — show everything
-}
 
 function render(usage, transcript, contextPct, modelId, version, latestVersion, cost, stdinData, config) {
   const pipe = `${c.slate800}│`;
@@ -592,7 +566,7 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
       const fhReset = formatResetTime(usage.fiveHourResets);
       fhValue = `${fhColor}${Math.round(usage.fiveHour)}%${c.reset}${fhReset ? ` ${fhReset}` : ""}`;
     } else {
-      fhValue = `${c.slate600}--${c.reset}`;
+      fhValue = `${c.slate600}N/A${c.reset}`;
     }
     columns.push({ label: `${c.slate800bold}5h Usage:${c.reset}`, value: fhValue });
   }
@@ -605,7 +579,7 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
       const wkReset = formatResetTime(usage.sevenDayResets);
       wkValue = `${wkColor}${Math.round(usage.sevenDay)}%${c.reset}${wkReset ? ` ${wkReset}` : ""}`;
     } else {
-      wkValue = `${c.slate600}--${c.reset}`;
+      wkValue = `${c.slate600}N/A${c.reset}`;
     }
     columns.push({ label: `${c.slate800bold}7d Usage:${c.reset}`, value: wkValue });
   }
@@ -633,9 +607,8 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
   // Session
   if (show("Session")) {
     const durationMs = cost?.total_duration_ms ?? 0;
-    if (durationMs > 0) {
-      columns.push({ label: `${c.slate800bold}Session:${c.reset}`, value: `${c.slate600}${formatDuration(durationMs)}${c.reset}` });
-    }
+    const sessionVal = durationMs > 0 ? formatDuration(durationMs) : "N/A";
+    columns.push({ label: `${c.slate800bold}Session:${c.reset}`, value: `${c.slate600}${sessionVal}${c.reset}` });
   }
 
   // Model
@@ -650,15 +623,15 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
       const dot = (version && latestVersion && version !== latestVersion)
         ? `${c.yellow}●${c.reset}` : `${c.green}●${c.reset}`;
       columns.push({ label: `${c.slate800bold}Version:${c.reset}`, value: `${dot} ${c.slate600}v${displayVersion}${c.reset}` });
+    } else {
+      columns.push({ label: `${c.slate800bold}Version:${c.reset}`, value: `${c.slate600}N/A${c.reset}` });
     }
   }
 
   // Directory
   if (show("Directory")) {
-    const workDir = stdinData?.workspace?.current_dir;
-    if (workDir) {
-      columns.push({ label: `${c.slate800bold}Directory:${c.reset}`, value: `${c.slate600}${workDir}${c.reset}` });
-    }
+    const workDir = stdinData?.workspace?.current_dir ?? "N/A";
+    columns.push({ label: `${c.slate800bold}Directory:${c.reset}`, value: `${c.slate600}${workDir}${c.reset}` });
   }
 
   // Cost (session cost in USD)
@@ -694,35 +667,23 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
   // API Time (time spent waiting for API responses)
   if (show("API Time")) {
     const apiMs = cost?.total_api_duration_ms ?? 0;
-    if (apiMs > 0) {
-      columns.push({ label: `${c.slate800bold}API Time:${c.reset}`, value: `${c.slate600}${formatDuration(apiMs)}${c.reset}` });
-    }
+    const apiVal = apiMs > 0 ? formatDuration(apiMs) : "N/A";
+    columns.push({ label: `${c.slate800bold}API Time:${c.reset}`, value: `${c.slate600}${apiVal}${c.reset}` });
   }
 
   // 5h Reset (standalone countdown)
   if (show("5h Reset")) {
-    const resetStr = usage?.fiveHourResets ? formatResetTime(usage.fiveHourResets) : `${c.slate600}--${c.reset}`;
-    columns.push({ label: `${c.slate800bold}5h Reset:${c.reset}`, value: resetStr || `${c.slate600}--${c.reset}` });
+    const resetStr = usage?.fiveHourResets ? formatResetTime(usage.fiveHourResets) : `${c.slate600}N/A${c.reset}`;
+    columns.push({ label: `${c.slate800bold}5h Reset:${c.reset}`, value: resetStr || `${c.slate600}N/A${c.reset}` });
   }
 
   // 7d Reset (standalone countdown)
   if (show("7d Reset")) {
-    const resetStr = usage?.sevenDayResets ? formatResetTime(usage.sevenDayResets) : `${c.slate600}--${c.reset}`;
-    columns.push({ label: `${c.slate800bold}7d Reset:${c.reset}`, value: resetStr || `${c.slate600}--${c.reset}` });
+    const resetStr = usage?.sevenDayResets ? formatResetTime(usage.sevenDayResets) : `${c.slate600}N/A${c.reset}`;
+    columns.push({ label: `${c.slate800bold}7d Reset:${c.reset}`, value: resetStr || `${c.slate600}N/A${c.reset}` });
   }
 
-  // ── Drop low-priority segments if terminal is narrow ──
-  // tput/mode con report wider than the actual Claude Code statusbar display area,
-  // so apply a 15% reduction to compensate for UI chrome and padding
   const layout = config.layout || "vertical";
-  const rawWidth = getTermWidth();
-  const termWidth = Math.floor(rawWidth * 0.85);
-  for (const dropLabel of RESPONSIVE_DROP_ORDER) {
-    if (calcRowWidth(columns, layout) < termWidth) break;
-    const idx = columns.findIndex(col => stripAnsi(col.label).startsWith(dropLabel));
-    if (idx !== -1) columns.splice(idx, 1);
-  }
-
   const blankLine = `\n${c.reset}\u200B`;
   let output;
 
