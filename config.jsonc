@@ -1,0 +1,18 @@
+{
+  "layout": "vertical",
+  "5h Usage": true,
+  "7d Usage": true,
+  "Context": true,
+  "Model": true,
+  "Version": true,
+  "Session": false,
+  "Changes": false,
+  "Directory": false,
+  "Cost": false,
+  "Tokens": false,
+  "Output Tokens": false,
+  "Cache": false,
+  "API Time": false,
+  "5h Reset": false,
+  "7d Reset": false
+}
