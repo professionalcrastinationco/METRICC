@@ -114,29 +114,55 @@ Values change color as they approach limits:
 
 ---
 
-## ![](docs/images/icon-20px-rocket-launch-indigo-500-regular.png) Setup
+## ![](docs/images/icon-20px-rocket-launch-indigo-500-regular.png) Install
 
-### Step 1 — Save the script
-
-```bash
-mkdir -p ~/.claude/hud
-curl -o ~/.claude/hud/metricc-cc-statusbar.mjs https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/metricc-cc-statusbar.mjs
-```
+Pick whichever method you're most comfortable with. All three get you the same result.
 
 <details>
-<summary><strong>Windows (PowerShell)</strong></summary>
+<summary><strong>![](docs/images/icon-20px-magic-wand-emerald-500-regular.png) Easy — Let Claude Do It</strong></summary>
 
-```powershell
-New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\hud"
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/metricc-cc-statusbar.mjs" -OutFile "$env:USERPROFILE\.claude\hud\metricc-cc-statusbar.mjs"
+&nbsp;
+
+Copy the repo URL below and paste it into Claude Code with the prompt:
+
 ```
+https://github.com/professionalcrastinationco/METRICC
+
+Install the METRICC statusline from this repo.
+```
+
+Claude will download the script, update your settings, and restart — no manual steps needed.
 
 </details>
 
-### Step 2 — Tell Claude Code to use it
+<details>
+<summary><strong>![](docs/images/icon-20px-download-simple-sky-500-regular.png) Manual — Download & Configure</strong></summary>
 
-Add this to `~/.claude/settings.json`:
+&nbsp;
 
+#### Step 1 — Download the script
+
+Go to the [raw script file](https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/metricc-cc-statusbar.mjs) and save it to your Claude config folder:
+
+| OS | Save to |
+|---|---|
+| **macOS / Linux** | `~/.claude/hud/metricc-cc-statusbar.mjs` |
+| **Windows** | `C:\Users\YourName\.claude\hud\metricc-cc-statusbar.mjs` |
+
+Create the `hud` folder if it doesn't exist.
+
+#### Step 2 — Update settings
+
+Open your `settings.json` file:
+
+| OS | Location |
+|---|---|
+| **macOS / Linux** | `~/.claude/settings.json` |
+| **Windows** | `C:\Users\YourName\.claude\settings.json` |
+
+Add the following block (or merge it into your existing settings):
+
+**macOS / Linux:**
 ```json
 {
   "statusLine": {
@@ -147,14 +173,69 @@ Add this to `~/.claude/settings.json`:
 }
 ```
 
-> **Windows users:** Use your full path:
-> ```json
-> "command": "node C:\\Users\\YourName\\.claude\\hud\\metricc-cc-statusbar.mjs"
-> ```
+**Windows:**
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "node C:\\Users\\YourName\\.claude\\hud\\metricc-cc-statusbar.mjs",
+    "padding": 0
+  }
+}
+```
 
-### Step 3 — Restart Claude Code
+#### Step 3 — Restart Claude Code
 
-> **Upgrading?** Re-run the download command from Step 1. Your config is preserved.
+</details>
+
+<details>
+<summary><strong>![](docs/images/icon-20px-terminal-violet-500-regular.png) Advanced — Terminal Commands</strong></summary>
+
+&nbsp;
+
+#### macOS / Linux (Bash)
+
+```bash
+mkdir -p ~/.claude/hud
+curl -o ~/.claude/hud/metricc-cc-statusbar.mjs \
+  https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/metricc-cc-statusbar.mjs
+```
+
+Then add to `~/.claude/settings.json`:
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "node ~/.claude/hud/metricc-cc-statusbar.mjs",
+    "padding": 0
+  }
+}
+```
+
+#### Windows (PowerShell)
+
+```powershell
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\hud"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/professionalcrastinationco/METRICC/main/metricc-cc-statusbar.mjs" `
+  -OutFile "$env:USERPROFILE\.claude\hud\metricc-cc-statusbar.mjs"
+```
+
+Then add to `C:\Users\YourName\.claude\settings.json`:
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "node C:\\Users\\YourName\\.claude\\hud\\metricc-cc-statusbar.mjs",
+    "padding": 0
+  }
+}
+```
+
+#### After either — Restart Claude Code
+
+</details>
+
+> **Upgrading?** Re-run the download or let Claude re-install. Your config is preserved.
 
 ---
 
