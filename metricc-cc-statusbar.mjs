@@ -21,12 +21,7 @@ const CACHE_TTL_MS = 60_000;          // 60s cache for usage API
 const CACHE_TTL_FAILURE_MS = 15_000;  // 15s on failure
 const LOCK_STALE_MS = 20_000;         // abandon a lock older than this (crashed holder)
 const API_TIMEOUT_MS = 8000;
-// A single background daemon (spawned by whichever session needs it first) is the
-// only process that ever calls the usage API, so its poll interval can be far
-// tighter than the old per-invocation 60s TTL without multiplying by session count.
-// ponytail: fixed backoff curve, not rate-limit-aware math — halve on success,
-// double on failure, capped. Tune DAEMON_POLL_MS_DEFAULT directly if 5s ever proves
-// too hot or too slow for this endpoint.
+// Sole caller of the usage API — safe to poll tighter than the old per-session 60s TTL.
 const DAEMON_POLL_MS_DEFAULT = 5_000;
 const DAEMON_POLL_MS_MAX = 60_000;
 const DAEMON_IDLE_EXIT_MS = 10 * 60_000;  // no session rendered in this long → daemon exits
@@ -256,8 +251,7 @@ function refreshAccessToken(refreshToken) {
   });
 }
 
-// Resolves { status, body }, not just the parsed body — the daemon's backoff
-// curve needs the status code (e.g. 429) even when body is null.
+// Includes status so callers can see 429s, not just the body.
 function fetchUsage(accessToken) {
   return new Promise((resolve) => {
     const req = https.request({
@@ -306,8 +300,7 @@ function writeBackCredentials(creds) {
   } catch { /* */ }
 }
 
-// Atomic wx-flag file lock, reused for both the direct-fetch fallback below
-// and gating which session gets to spawn the daemon.
+// Reused by the direct-fetch fallback and the daemon spawn gate below.
 function acquireFileLock(path, staleMs) {
   try {
     writeFileSync(path, String(process.pid), { flag: "wx" });
@@ -328,8 +321,7 @@ function releaseFileLock(path) {
   try { unlinkSync(path); } catch { /* already gone */ }
 }
 
-// One session at a time refreshes the shared cache directly; the rest just
-// read it. Only exercised when the daemon (see below) isn't up yet.
+// Fallback path only — used before the daemon takes over.
 function acquireLock() { return acquireFileLock(LOCK_PATH, LOCK_STALE_MS); }
 function releaseLock() { releaseFileLock(LOCK_PATH); }
 
@@ -359,9 +351,7 @@ function heartbeatAge() {
   try { return Date.now() - Number(readFileSync(HEARTBEAT_PATH, "utf-8")); } catch { return Infinity; }
 }
 
-// Spawns the single shared usage-polling daemon if none is already running.
-// The spawn-lock (not the daemon pidfile) is what prevents two sessions that
-// both observe "no daemon" in the same instant from each spawning one.
+// Spawn lock (not the pidfile) prevents a simultaneous double-spawn.
 function ensureDaemonRunning() {
   if (isDaemonAlive()) return;
   if (!acquireFileLock(DAEMON_SPAWN_LOCK_PATH, DAEMON_SPAWN_LOCK_STALE_MS)) return;
@@ -386,12 +376,10 @@ async function getUsage() {
   touchHeartbeat();
 
   const cache = readCache();
-  // Daemon owns freshness once it's up — trust its cache as-is rather than
-  // racing it with our own fetch under this invocation's TTL.
+  // Daemon owns freshness once it's up.
   if (isDaemonAlive()) return cache?.data ?? null;
 
-  // No daemon yet (e.g. it hasn't finished its very first fetch, or failed to
-  // spawn) — fall back to the direct single-shot fetch, same as before.
+  // No daemon yet — fall back to a direct fetch.
   if (cache && isCacheValid(cache)) return cache.data;
   if (!acquireLock()) return cache?.data ?? null;
 
@@ -427,9 +415,7 @@ async function getUsage() {
   }
 }
 
-// The single process that ever calls the usage API once it's running. Polls
-// at DAEMON_POLL_MS_DEFAULT, backing off on failure (incl. 429) and decaying
-// back down on success, and exits once no session has rendered in a while.
+// Sole API poller; backs off on failure, idle-exits when unused.
 async function runDaemon() {
   writeFileSync(DAEMON_PID_PATH, String(process.pid));
   touchHeartbeat();
@@ -437,11 +423,7 @@ async function runDaemon() {
   let pollMs = DAEMON_POLL_MS_DEFAULT;
 
   while (heartbeatAge() <= DAEMON_IDLE_EXIT_MS) {
-    // If the pidfile now names a different, still-alive daemon, a handoff
-    // happened (e.g. our claim raced another spawn) — step aside rather than
-    // double-poll. If it names nobody alive, reclaim it (e.g. it was cleared
-    // out from under us); this can't detect an orphan that kept its own PID
-    // out of band, only a legitimate handoff or a missing/stale record.
+    // Step aside if a live rival owns the pidfile; otherwise reclaim it.
     const recordedPid = readDaemonPid();
     if (recordedPid !== process.pid) {
       if (recordedPid != null && isProcessAlive(recordedPid)) return;
