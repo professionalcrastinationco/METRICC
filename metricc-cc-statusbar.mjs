@@ -376,10 +376,11 @@ async function getUsage() {
   touchHeartbeat();
 
   const cache = readCache();
-  // Daemon owns freshness once it's up.
-  if (isDaemonAlive()) return cache?.data ?? null;
+  // Trust the daemon only once it has actually produced data — a freshly
+  // spawned daemon is "alive" immediately but hasn't fetched anything yet.
+  if (isDaemonAlive() && cache?.data) return cache.data;
 
-  // No daemon yet — fall back to a direct fetch.
+  // No usable cache yet — fall back to a direct fetch (daemon warming up or absent).
   if (cache && isCacheValid(cache)) return cache.data;
   if (!acquireLock()) return cache?.data ?? null;
 
