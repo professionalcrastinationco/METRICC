@@ -129,14 +129,16 @@ function getContextPercent(stdin) {
 }
 
 function getModelId(stdin) {
-  const id = stdin.model?.id ?? stdin.model?.display_name ?? "unknown";
-  // "claude-opus-4-6" → "Opus 4.6", "claude-sonnet-4-5-20250929" → "Sonnet 4.5"
-  const m = id.match(/(?:claude-)?(opus|sonnet|haiku)-(\d+)-(\d+)/);
-  if (m) {
-    const name = m[1].charAt(0).toUpperCase() + m[1].slice(1);
-    return `${name} ${m[2]}.${m[3]}`;
-  }
-  return id;
+  // Claude Code sends the human-friendly name directly — prefer it over guessing from the id.
+  if (stdin.model?.display_name) return stdin.model.display_name;
+  const id = stdin.model?.id ?? "unknown";
+  // No whitelist of family names: split into name words vs version numbers, whatever they are.
+  // "claude-opus-4-6" → "Opus 4.6", "claude-encyclopedia-5" → "Encyclopedia 5", "claude-haiku-4-5-20251001" → "Haiku 4.5"
+  const parts = id.split("-").filter((part) => part !== "claude" && !/^\d{8}$/.test(part)); // drop date stamps too
+  const name = parts.filter((part) => !/^\d+$/.test(part)).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+  const version = parts.filter((part) => /^\d+$/.test(part)).join(".");
+  if (!name) return id;
+  return version ? `${name} ${version}` : name;
 }
 
 function getVersion(stdin) {
