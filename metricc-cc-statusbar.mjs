@@ -9,24 +9,18 @@
  * - Transcript JSONL (session start, running agents)
  */
 
-import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, mkdirSync, unlinkSync, createReadStream } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, renameSync, statSync, openSync, readSync, closeSync, mkdirSync, unlinkSync, createReadStream } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname, basename } from "node:path";
 import { createInterface } from "node:readline";
 import https from "node:https";
-import { execSync, spawn } from "node:child_process";
+import { execSync } from "node:child_process";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const CACHE_TTL_MS = 60_000;          // 60s cache for usage API
 const CACHE_TTL_FAILURE_MS = 15_000;  // 15s on failure
 const LOCK_STALE_MS = 20_000;         // abandon a lock older than this (crashed holder)
 const API_TIMEOUT_MS = 8000;
-// Sole caller of the usage API — safe to poll tighter than the old per-session 60s TTL.
-const DAEMON_POLL_MS_DEFAULT = 5_000;
-const DAEMON_POLL_MS_MAX = 60_000;
-const DAEMON_IDLE_EXIT_MS = 10 * 60_000;  // no session rendered in this long → daemon exits
-const DAEMON_SPAWN_LOCK_STALE_MS = 10_000;
-const STALE_DATA_MAX_MS = 30 * 60_000;    // only blank out data after this long of failures
 const MAX_TAIL_BYTES = 512 * 1024;    // 500KB tail read for large transcripts
 const MAX_AGENT_MAP = 100;
 const STALE_AGENT_MS = 30 * 60_000;   // 30 min = stale agent
@@ -47,9 +41,6 @@ const HOME = homedir();
 const CONFIG_PATH = join(HOME, ".claude", "hud", "config.jsonc");
 const CACHE_PATH = join(HOME, ".claude", "hud", ".usage-cache.json");
 const LOCK_PATH = join(HOME, ".claude", "hud", ".usage-cache.lock");
-const DAEMON_PID_PATH = join(HOME, ".claude", "hud", ".usage-daemon.pid");
-const DAEMON_SPAWN_LOCK_PATH = join(HOME, ".claude", "hud", ".usage-daemon.spawn.lock");
-const HEARTBEAT_PATH = join(HOME, ".claude", "hud", ".usage-heartbeat");
 const VERSION_CACHE_PATH = join(HOME, ".claude", "hud", ".version-cache.json");
 const CRED_PATH = join(HOME, ".claude", ".credentials.json");
 
@@ -174,7 +165,10 @@ function writeCache(data, error = false) {
   try {
     const dir = dirname(CACHE_PATH);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    writeFileSync(CACHE_PATH, JSON.stringify({ timestamp: Date.now(), data, error }));
+    // Temp-file-then-rename: readers never observe a partial write.
+    const tmpPath = `${CACHE_PATH}.${process.pid}.tmp`;
+    writeFileSync(tmpPath, JSON.stringify({ timestamp: Date.now(), data, error }));
+    renameSync(tmpPath, CACHE_PATH);
   } catch { /* ignore */ }
 }
 
@@ -296,20 +290,22 @@ function writeBackCredentials(creds) {
     target.accessToken = creds.accessToken;
     if (creds.expiresAt != null) target.expiresAt = creds.expiresAt;
     if (creds.refreshToken) target.refreshToken = creds.refreshToken;
-    writeFileSync(CRED_PATH, JSON.stringify(parsed, null, 2));
+    const tmpPath = `${CRED_PATH}.${process.pid}.tmp`;
+    writeFileSync(tmpPath, JSON.stringify(parsed, null, 2));
+    renameSync(tmpPath, CRED_PATH);
   } catch { /* */ }
 }
 
-// Reused by the direct-fetch fallback and the daemon spawn gate below.
-function acquireFileLock(path, staleMs) {
+// Only one session refreshes the cache at a time; the rest read what it wrote.
+function acquireLock() {
   try {
-    writeFileSync(path, String(process.pid), { flag: "wx" });
+    writeFileSync(LOCK_PATH, String(process.pid), { flag: "wx" });
     return true;
   } catch (err) {
     if (err.code !== "EEXIST") return false;
     try {
-      if (Date.now() - statSync(path).mtimeMs > staleMs) {
-        writeFileSync(path, String(process.pid));
+      if (Date.now() - statSync(LOCK_PATH).mtimeMs > LOCK_STALE_MS) {
+        writeFileSync(LOCK_PATH, String(process.pid));
         return true;
       }
     } catch { /* lock vanished mid-check; treat as contended */ }
@@ -317,70 +313,12 @@ function acquireFileLock(path, staleMs) {
   }
 }
 
-function releaseFileLock(path) {
-  try { unlinkSync(path); } catch { /* already gone */ }
-}
-
-// Fallback path only — used before the daemon takes over.
-function acquireLock() { return acquireFileLock(LOCK_PATH, LOCK_STALE_MS); }
-function releaseLock() { releaseFileLock(LOCK_PATH); }
-
-function isProcessAlive(pid) {
-  try { process.kill(pid, 0); return true; } catch { return false; }
-}
-
-function readDaemonPid() {
-  try {
-    const pid = parseInt(readFileSync(DAEMON_PID_PATH, "utf-8").trim(), 10);
-    return Number.isFinite(pid) && pid > 0 ? pid : null;
-  } catch {
-    return null;
-  }
-}
-
-function isDaemonAlive() {
-  const pid = readDaemonPid();
-  return pid != null && isProcessAlive(pid);
-}
-
-function touchHeartbeat() {
-  try { writeFileSync(HEARTBEAT_PATH, String(Date.now())); } catch { /* best effort */ }
-}
-
-function heartbeatAge() {
-  try { return Date.now() - Number(readFileSync(HEARTBEAT_PATH, "utf-8")); } catch { return Infinity; }
-}
-
-// Spawn lock (not the pidfile) prevents a simultaneous double-spawn.
-function ensureDaemonRunning() {
-  if (isDaemonAlive()) return;
-  if (!acquireFileLock(DAEMON_SPAWN_LOCK_PATH, DAEMON_SPAWN_LOCK_STALE_MS)) return;
-  try {
-    const child = spawn(process.execPath, [process.argv[1], "--daemon"], {
-      detached: true,
-      stdio: "ignore",
-    });
-    writeFileSync(DAEMON_PID_PATH, String(child.pid));
-    child.unref();
-  } finally {
-    releaseFileLock(DAEMON_SPAWN_LOCK_PATH);
-  }
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function releaseLock() {
+  try { unlinkSync(LOCK_PATH); } catch { /* already gone */ }
 }
 
 async function getUsage() {
-  ensureDaemonRunning();
-  touchHeartbeat();
-
   const cache = readCache();
-  // Trust the daemon only once it has actually produced data — a freshly
-  // spawned daemon is "alive" immediately but hasn't fetched anything yet.
-  if (isDaemonAlive() && cache?.data) return cache.data;
-
-  // No usable cache yet — fall back to a direct fetch (daemon warming up or absent).
   if (cache && isCacheValid(cache)) return cache.data;
   if (!acquireLock()) return cache?.data ?? null;
 
@@ -414,50 +352,6 @@ async function getUsage() {
   } finally {
     releaseLock();
   }
-}
-
-// Sole API poller; backs off on failure, idle-exits when unused.
-async function runDaemon() {
-  writeFileSync(DAEMON_PID_PATH, String(process.pid));
-  touchHeartbeat();
-
-  let pollMs = DAEMON_POLL_MS_DEFAULT;
-
-  while (heartbeatAge() <= DAEMON_IDLE_EXIT_MS) {
-    // Step aside if a live rival owns the pidfile; otherwise reclaim it.
-    const recordedPid = readDaemonPid();
-    if (recordedPid !== process.pid) {
-      if (recordedPid != null && isProcessAlive(recordedPid)) return;
-      writeFileSync(DAEMON_PID_PATH, String(process.pid));
-    }
-
-    const creds = getCredentials();
-    if (creds) {
-      let activeCreds = creds;
-      if (activeCreds.expiresAt && activeCreds.expiresAt <= Date.now() && activeCreds.refreshToken) {
-        const refreshed = await refreshAccessToken(activeCreds.refreshToken);
-        if (refreshed) {
-          activeCreds = { ...activeCreds, ...refreshed };
-          writeBackCredentials(activeCreds);
-        }
-      }
-
-      const resp = await fetchUsage(activeCreds.accessToken);
-      if (resp.status === 200 && resp.body) {
-        writeCache(normalizeUsage(resp.body));
-        pollMs = Math.max(DAEMON_POLL_MS_DEFAULT, pollMs / 1.5);
-      } else {
-        pollMs = Math.min(pollMs * 2, DAEMON_POLL_MS_MAX);
-        const existing = readCache();
-        const dataIsStale = !existing || Date.now() - existing.timestamp > STALE_DATA_MAX_MS;
-        if (dataIsStale) writeCache(null, true);
-      }
-    }
-
-    await sleep(pollMs);
-  }
-
-  releaseFileLock(DAEMON_PID_PATH);
 }
 
 // ── Version Check (npm registry) ─────────────────────────────────────────────
@@ -918,10 +812,6 @@ async function main() {
   console.log(render(usage, transcript, contextPct, modelId, version, latestVersion, stdin.cost, stdin, config));
 }
 
-if (process.argv.includes("--daemon")) {
-  runDaemon().catch(() => releaseFileLock(DAEMON_PID_PATH));
-} else {
-  main().catch((err) => {
-    console.log(`[HUD] error: ${err.message}`);
-  });
-}
+main().catch((err) => {
+  console.log(`[HUD] error: ${err.message}`);
+});

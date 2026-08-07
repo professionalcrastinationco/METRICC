@@ -168,7 +168,6 @@ Add the following block (or merge it into your existing settings):
   "statusLine": {
     "type": "command",
     "command": "node ~/.claude/hud/metricc-cc-statusbar.mjs",
-    "refreshInterval": 10,
     "padding": 0
   }
 }
@@ -180,7 +179,6 @@ Add the following block (or merge it into your existing settings):
   "statusLine": {
     "type": "command",
     "command": "node C:\\Users\\YourName\\.claude\\hud\\metricc-cc-statusbar.mjs",
-    "refreshInterval": 10,
     "padding": 0
   }
 }
@@ -209,7 +207,6 @@ Then add to `~/.claude/settings.json`:
   "statusLine": {
     "type": "command",
     "command": "node ~/.claude/hud/metricc-cc-statusbar.mjs",
-    "refreshInterval": 10,
     "padding": 0
   }
 }
@@ -229,7 +226,6 @@ Then add to `C:\Users\YourName\.claude\settings.json`:
   "statusLine": {
     "type": "command",
     "command": "node C:\\Users\\YourName\\.claude\\hud\\metricc-cc-statusbar.mjs",
-    "refreshInterval": 10,
     "padding": 0
   }
 }
@@ -239,7 +235,7 @@ Then add to `C:\Users\YourName\.claude\settings.json`:
 
 </details>
 
-> **What's `refreshInterval`?** Without it the bar only redraws when something happens, so an idle session shows frozen numbers until you send a message. Drop it if you'd rather it stay event-driven.
+> **Want the bar to redraw on a timer?** By default it only redraws when something happens (e.g. you send a message), so an idle session shows frozen numbers in between. Add `"refreshInterval": 10` inside the `statusLine` block above to redraw every 10s instead. It costs a fresh Node process + transcript parse each interval, so it's opt-in rather than part of the default setup.
 
 > **Upgrading?** Re-run the download or let Claude re-install. Your config is preserved.
 
