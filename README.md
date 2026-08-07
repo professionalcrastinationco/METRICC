@@ -295,6 +295,7 @@ METRICC was inspired by the [oh-my-claudecode](https://github.com/Yeachan-Heo/oh
 
 Thanks to the following contributors who submitted PRs that helped shape improvements already included in METRICC:
 
+ - [@zachary95](https://github.com/zachary95) — human-friendly model names ([#6](https://github.com/professionalcrastinationco/METRICC/pull/6))
  - [@crimist](https://github.com/crimist) — API cost support ([#2](https://github.com/professionalcrastinationco/METRICC/pull/2))
  - [@DustyDiamond](https://github.com/DustyDiamond) — statusLine config fix ([#1](https://github.com/professionalcrastinationco/METRICC/pull/1))
 
