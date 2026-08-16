@@ -292,8 +292,10 @@ function writeBackCredentials(creds) {
     target.accessToken = creds.accessToken;
     if (creds.expiresAt != null) target.expiresAt = creds.expiresAt;
     if (creds.refreshToken) target.refreshToken = creds.refreshToken;
+    // Rename replaces the inode, so the temp file's mode is what survives, not
+    // the original's. Create it 0600 or the tokens land world-readable on POSIX.
     const tmpPath = `${CRED_PATH}.${process.pid}.tmp`;
-    writeFileSync(tmpPath, JSON.stringify(parsed, null, 2));
+    writeFileSync(tmpPath, JSON.stringify(parsed, null, 2), { mode: 0o600 });
     renameSync(tmpPath, CRED_PATH);
   } catch { /* */ }
 }
