@@ -9,7 +9,7 @@
  * - Transcript JSONL (session start, running agents)
  */
 
-import { existsSync, readFileSync, writeFileSync, statSync, openSync, readSync, closeSync, mkdirSync, createReadStream } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, renameSync, statSync, openSync, readSync, closeSync, mkdirSync, unlinkSync, createReadStream } from "node:fs";
 import { homedir } from "node:os";
 import { join, dirname, basename } from "node:path";
 import { createInterface } from "node:readline";
@@ -19,6 +19,7 @@ import { execSync } from "node:child_process";
 // ── Constants ──────────────────────────────────────────────────────────────────
 const CACHE_TTL_MS = 60_000;          // 60s cache for usage API
 const CACHE_TTL_FAILURE_MS = 15_000;  // 15s on failure
+const LOCK_STALE_MS = 20_000;         // abandon a lock older than this (crashed holder)
 const API_TIMEOUT_MS = 8000;
 const MAX_TAIL_BYTES = 512 * 1024;    // 500KB tail read for large transcripts
 const MAX_AGENT_MAP = 100;
@@ -39,6 +40,7 @@ const ALL_COLUMNS = [
 const HOME = homedir();
 const CONFIG_PATH = join(HOME, ".claude", "hud", "config.jsonc");
 const CACHE_PATH = join(HOME, ".claude", "hud", ".usage-cache.json");
+const LOCK_PATH = join(HOME, ".claude", "hud", ".usage-cache.lock");
 const VERSION_CACHE_PATH = join(HOME, ".claude", "hud", ".version-cache.json");
 const CRED_PATH = join(HOME, ".claude", ".credentials.json");
 
@@ -165,7 +167,10 @@ function writeCache(data, error = false) {
   try {
     const dir = dirname(CACHE_PATH);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    writeFileSync(CACHE_PATH, JSON.stringify({ timestamp: Date.now(), data, error }));
+    // Temp-file-then-rename: readers never observe a partial write.
+    const tmpPath = `${CACHE_PATH}.${process.pid}.tmp`;
+    writeFileSync(tmpPath, JSON.stringify({ timestamp: Date.now(), data, error }));
+    renameSync(tmpPath, CACHE_PATH);
   } catch { /* ignore */ }
 }
 
@@ -242,6 +247,7 @@ function refreshAccessToken(refreshToken) {
   });
 }
 
+// Includes status so callers can see 429s, not just the body.
 function fetchUsage(accessToken) {
   return new Promise((resolve) => {
     const req = https.request({
@@ -255,14 +261,27 @@ function fetchUsage(accessToken) {
       res.on("data", (ch) => { data += ch; });
       res.on("end", () => {
         if (res.statusCode === 200) {
-          try { resolve(JSON.parse(data)); } catch { resolve(null); }
-        } else resolve(null);
+          try { resolve({ status: 200, body: JSON.parse(data) }); } catch { resolve({ status: 200, body: null }); }
+        } else {
+          resolve({ status: res.statusCode, body: null });
+        }
       });
     });
-    req.on("error", () => resolve(null));
-    req.on("timeout", () => { req.destroy(); resolve(null); });
+    req.on("error", () => resolve({ status: 0, body: null }));
+    req.on("timeout", () => { req.destroy(); resolve({ status: 0, body: null }); });
     req.end();
   });
+}
+
+function normalizeUsage(resp) {
+  const clamp = (v) => (v == null || !isFinite(v)) ? 0 : Math.max(0, Math.min(100, v));
+  const parseDate = (s) => { try { const d = new Date(s); return isNaN(d.getTime()) ? null : d; } catch { return null; } };
+  return {
+    fiveHour: clamp(resp.five_hour?.utilization),
+    fiveHourResets: parseDate(resp.five_hour?.resets_at),
+    sevenDay: clamp(resp.seven_day?.utilization),
+    sevenDayResets: parseDate(resp.seven_day?.resets_at),
+  };
 }
 
 function writeBackCredentials(creds) {
@@ -273,48 +292,68 @@ function writeBackCredentials(creds) {
     target.accessToken = creds.accessToken;
     if (creds.expiresAt != null) target.expiresAt = creds.expiresAt;
     if (creds.refreshToken) target.refreshToken = creds.refreshToken;
-    writeFileSync(CRED_PATH, JSON.stringify(parsed, null, 2));
+    const tmpPath = `${CRED_PATH}.${process.pid}.tmp`;
+    writeFileSync(tmpPath, JSON.stringify(parsed, null, 2));
+    renameSync(tmpPath, CRED_PATH);
   } catch { /* */ }
+}
+
+// Only one session refreshes the cache at a time; the rest read what it wrote.
+function acquireLock() {
+  try {
+    writeFileSync(LOCK_PATH, String(process.pid), { flag: "wx" });
+    return true;
+  } catch (err) {
+    if (err.code !== "EEXIST") return false;
+    try {
+      if (Date.now() - statSync(LOCK_PATH).mtimeMs > LOCK_STALE_MS) {
+        writeFileSync(LOCK_PATH, String(process.pid));
+        return true;
+      }
+    } catch { /* lock vanished mid-check; treat as contended */ }
+    return false;
+  }
+}
+
+function releaseLock() {
+  try { unlinkSync(LOCK_PATH); } catch { /* already gone */ }
 }
 
 async function getUsage() {
   const cache = readCache();
   if (cache && isCacheValid(cache)) return cache.data;
+  if (!acquireLock()) return cache?.data ?? null;
 
-  let creds = getCredentials();
-  if (!creds) { writeCache(null, true); return null; }
+  try {
+    let creds = getCredentials();
+    if (!creds) { writeCache(null, true); return null; }
 
-  // Refresh if expired
-  if (creds.expiresAt && creds.expiresAt <= Date.now()) {
-    if (creds.refreshToken) {
-      const refreshed = await refreshAccessToken(creds.refreshToken);
-      if (refreshed) {
-        creds = { ...creds, ...refreshed };
-        writeBackCredentials(creds);
+    // Refresh if expired
+    if (creds.expiresAt && creds.expiresAt <= Date.now()) {
+      if (creds.refreshToken) {
+        const refreshed = await refreshAccessToken(creds.refreshToken);
+        if (refreshed) {
+          creds = { ...creds, ...refreshed };
+          writeBackCredentials(creds);
+        } else {
+          writeCache(null, true);
+          return null;
+        }
       } else {
         writeCache(null, true);
         return null;
       }
-    } else {
-      writeCache(null, true);
-      return null;
     }
+
+    const resp = await fetchUsage(creds.accessToken);
+    if (resp.status !== 200 || !resp.body) { writeCache(null, true); return null; }
+
+    const data = normalizeUsage(resp.body);
+    writeCache(data);
+    return data;
+  } finally {
+    releaseLock();
   }
-
-  const resp = await fetchUsage(creds.accessToken);
-  if (!resp) { writeCache(null, true); return null; }
-
-  const clamp = (v) => (v == null || !isFinite(v)) ? 0 : Math.max(0, Math.min(100, v));
-  const parseDate = (s) => { try { const d = new Date(s); return isNaN(d.getTime()) ? null : d; } catch { return null; } };
-
-  const data = {
-    fiveHour: clamp(resp.five_hour?.utilization),
-    fiveHourResets: parseDate(resp.five_hour?.resets_at),
-    sevenDay: clamp(resp.seven_day?.utilization),
-    sevenDayResets: parseDate(resp.seven_day?.resets_at),
-  };
-  writeCache(data);
-  return data;
 }
 
 // ── Version Check (npm registry) ─────────────────────────────────────────────
