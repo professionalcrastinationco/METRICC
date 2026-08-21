@@ -17,8 +17,15 @@ import https from "node:https";
 import { execSync } from "node:child_process";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const CACHE_TTL_MS = 60_000;          // 60s cache for usage API
-const CACHE_TTL_FAILURE_MS = 15_000;  // 15s on failure
+// Defaults for the usage-API cache/retry cadence — all overridable via config.jsonc, see readConfig().
+const DEFAULT_SUCCESS_TTL_MS = 60_000;               // normal cache TTL once a fetch succeeds
+const DEFAULT_NON_RATE_LIMIT_FAILURE_TTL_MS = 15_000; // flat retry delay for non-429 failures (network error, 5xx, etc.)
+const DEFAULT_RATE_LIMIT_BACKOFF_BASE_MS = 60_000;    // first 429 backoff starts here
+const DEFAULT_RATE_LIMIT_BACKOFF_MULTIPLIER = 2;      // each consecutive 429 multiplies the backoff by this
+const DEFAULT_RATE_LIMIT_BACKOFF_MAX_MS = 300_000;    // backoff never grows past 5 minutes
+const DEFAULT_RATE_LIMIT_BACKOFF_DECAY_FACTOR = 0.8;  // each success shrinks a lingering backoff by 20%
+const DEFAULT_SWEET_SPOT_SENSITIVITY = 1.5;           // how fast the learned TTL climbs toward the cap as the recent 429 rate rises
+const HISTORY_MAX_ENTRIES = 100;      // sweet-spot TTL is learned from this many recent fetch outcomes
 const LOCK_STALE_MS = 20_000;         // abandon a lock older than this (crashed holder)
 const API_TIMEOUT_MS = 8000;
 const MAX_TAIL_BYTES = 512 * 1024;    // 500KB tail read for large transcripts
@@ -42,6 +49,7 @@ const CONFIG_PATH = join(HOME, ".claude", "hud", "config.jsonc");
 const CACHE_PATH = join(HOME, ".claude", "hud", ".usage-cache.json");
 const LOCK_PATH = join(HOME, ".claude", "hud", ".usage-cache.lock");
 const VERSION_CACHE_PATH = join(HOME, ".claude", "hud", ".version-cache.json");
+const HISTORY_PATH = join(HOME, ".claude", "hud", ".usage-history.json");
 const CRED_PATH = join(HOME, ".claude", ".credentials.json");
 
 // ── ANSI Colors ────────────────────────────────────────────────────────────────
@@ -87,10 +95,31 @@ const SECTION_DEFAULTS = {
   "Tokens": false, "Output Tokens": false, "Cache": false, "API Time": false, "5h Reset": false, "7d Reset": false,
 };
 
+const USAGE_RETRY_DEFAULTS = {
+  successTtlMs: DEFAULT_SUCCESS_TTL_MS,
+  nonRateLimitFailureTtlMs: DEFAULT_NON_RATE_LIMIT_FAILURE_TTL_MS,
+  rateLimitBackoffBaseMs: DEFAULT_RATE_LIMIT_BACKOFF_BASE_MS,
+  rateLimitBackoffMultiplier: DEFAULT_RATE_LIMIT_BACKOFF_MULTIPLIER,
+  rateLimitBackoffMaxMs: DEFAULT_RATE_LIMIT_BACKOFF_MAX_MS,
+  rateLimitBackoffDecayFactor: DEFAULT_RATE_LIMIT_BACKOFF_DECAY_FACTOR,
+  sweetSpotSensitivity: DEFAULT_SWEET_SPOT_SENSITIVITY,
+};
+
+// Reads usage-API retry/backoff tunables from config.jsonc, falling back to defaults for missing or invalid values.
+function readUsageRetryConfig(cfg) {
+  const usage = {};
+  for (const key of Object.keys(USAGE_RETRY_DEFAULTS)) {
+    const value = cfg[key];
+    const isValidNumber = typeof value === "number" && isFinite(value) && value > 0;
+    usage[key] = isValidNumber ? value : USAGE_RETRY_DEFAULTS[key];
+  }
+  return usage;
+}
+
 function readConfig() {
   try {
     if (!existsSync(CONFIG_PATH)) {
-      return { columns: ALL_COLUMNS.filter((id) => SECTION_DEFAULTS[id] !== false), layout: "vertical" };
+      return { columns: ALL_COLUMNS.filter((id) => SECTION_DEFAULTS[id] !== false), layout: "vertical", usage: readUsageRetryConfig({}) };
     }
     const cfg = parseJsonc(readFileSync(CONFIG_PATH, "utf-8"));
     const enabled = ALL_COLUMNS.filter((id) => {
@@ -98,9 +127,9 @@ function readConfig() {
       return SECTION_DEFAULTS[id] !== false;
     });
     const layout = cfg.layout === "horizontal" ? "horizontal" : "vertical";
-    return { columns: enabled.length > 0 ? enabled : ALL_COLUMNS, layout };
+    return { columns: enabled.length > 0 ? enabled : ALL_COLUMNS, layout, usage: readUsageRetryConfig(cfg) };
   } catch {
-    return { columns: ALL_COLUMNS.filter((id) => SECTION_DEFAULTS[id] !== false), layout: "vertical" };
+    return { columns: ALL_COLUMNS.filter((id) => SECTION_DEFAULTS[id] !== false), layout: "vertical", usage: readUsageRetryConfig({}) };
   }
 }
 
@@ -163,19 +192,65 @@ function readCache() {
   }
 }
 
-function writeCache(data, error = false) {
+function writeCache(data, error = false, { rateLimited = false, backoffMs = null } = {}) {
   try {
     const dir = dirname(CACHE_PATH);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     // Temp-file-then-rename: readers never observe a partial write.
     const tmpPath = `${CACHE_PATH}.${process.pid}.tmp`;
-    writeFileSync(tmpPath, JSON.stringify({ timestamp: Date.now(), data, error }));
+    writeFileSync(tmpPath, JSON.stringify({ timestamp: Date.now(), data, error, rateLimited, backoffMs }));
     renameSync(tmpPath, CACHE_PATH);
   } catch { /* ignore */ }
 }
 
-function isCacheValid(cache) {
-  const ttl = cache.error ? CACHE_TTL_FAILURE_MS : CACHE_TTL_MS;
+// Rolling record of the last HISTORY_MAX_ENTRIES fetch outcomes, used to learn a per-machine sweet-spot TTL.
+// Concurrent sessions may race this read-modify-write; losing an occasional entry is fine for a rolling average.
+function readHistory() {
+  try {
+    if (!existsSync(HISTORY_PATH)) return [];
+    const entries = JSON.parse(readFileSync(HISTORY_PATH, "utf-8"));
+    return Array.isArray(entries) ? entries : [];
+  } catch {
+    return [];
+  }
+}
+
+function recordHistoryEntry(rateLimited) {
+  try {
+    const entries = readHistory();
+    entries.push({ timestamp: Date.now(), rateLimited });
+    const trimmed = entries.slice(-HISTORY_MAX_ENTRIES);
+    const dir = dirname(HISTORY_PATH);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const tmpPath = `${HISTORY_PATH}.${process.pid}.tmp`;
+    writeFileSync(tmpPath, JSON.stringify(trimmed));
+    renameSync(tmpPath, HISTORY_PATH);
+  } catch { /* ignore */ }
+}
+
+// The sweet-spot TTL: how often we can afford to actually hit the API without provoking 429s, learned from
+// how often recent attempts got rate-limited. 0% rate-limited in the window → stay at the fast default TTL
+// (favor freshness). As the rate-limited fraction climbs, slide toward the backoff cap (favor avoiding 429s),
+// with a safety margin so the learned TTL sits a bit above the minimum that was merely "good enough" recently.
+function computeSweetSpotTtlMs(usageConfig) {
+  const entries = readHistory();
+  if (entries.length === 0) return usageConfig.successTtlMs;
+
+  const rateLimitedCount = entries.filter((entry) => entry.rateLimited).length;
+  const rateLimitedRatio = rateLimitedCount / entries.length;
+
+  const rangeMs = usageConfig.rateLimitBackoffMaxMs - usageConfig.successTtlMs;
+  const sweetSpotMs = usageConfig.successTtlMs + rateLimitedRatio * usageConfig.sweetSpotSensitivity * rangeMs;
+  return Math.max(usageConfig.successTtlMs, Math.min(sweetSpotMs, usageConfig.rateLimitBackoffMaxMs));
+}
+
+// 429s get their own exponential-backoff TTL (stored on the cache entry); other failures use a flat retry delay;
+// a successful fetch uses the learned sweet-spot TTL instead of the raw configured default.
+function isCacheValid(cache, usageConfig) {
+  let ttl = computeSweetSpotTtlMs(usageConfig);
+  if (cache.error) {
+    ttl = cache.rateLimited ? (cache.backoffMs ?? usageConfig.rateLimitBackoffBaseMs) : usageConfig.nonRateLimitFailureTtlMs;
+  }
   return Date.now() - cache.timestamp < ttl;
 }
 
@@ -324,13 +399,16 @@ function releaseLock() {
 }
 
 // { data, stale } — stale is true when data is carried forward from the last successful fetch, not a live read.
-async function getUsage() {
+async function getUsage(usageConfig) {
   const cache = readCache();
   const previousData = cache?.data ?? null;
   const asStaleResult = () => ({ data: previousData, stale: previousData != null });
 
-  if (cache && isCacheValid(cache)) return { data: cache.data, stale: !!cache.error };
+  if (cache && isCacheValid(cache, usageConfig)) return { data: cache.data, stale: !!cache.error };
   if (!acquireLock()) return asStaleResult();
+
+  // Carries the last-known backoff forward so consecutive 429s keep growing it, and successes keep decaying it.
+  const priorBackoffMs = cache?.backoffMs ?? usageConfig.rateLimitBackoffBaseMs;
 
   try {
     let creds = getCredentials();
@@ -354,10 +432,18 @@ async function getUsage() {
     }
 
     const resp = await fetchUsage(creds.accessToken);
+    if (resp.status === 429) {
+      const nextBackoffMs = Math.min(priorBackoffMs * usageConfig.rateLimitBackoffMultiplier, usageConfig.rateLimitBackoffMaxMs);
+      writeCache(previousData, true, { rateLimited: true, backoffMs: nextBackoffMs });
+      recordHistoryEntry(true);
+      return asStaleResult();
+    }
     if (resp.status !== 200 || !resp.body) { writeCache(previousData, true); return asStaleResult(); }
 
     const data = normalizeUsage(resp.body);
-    writeCache(data);
+    const decayedBackoffMs = Math.max(usageConfig.rateLimitBackoffBaseMs, priorBackoffMs * usageConfig.rateLimitBackoffDecayFactor);
+    writeCache(data, false, { backoffMs: decayedBackoffMs });
+    recordHistoryEntry(false);
     return { data, stale: false };
   } finally {
     releaseLock();
@@ -816,7 +902,7 @@ async function main() {
 
   // Run usage API, transcript parsing, and version check concurrently
   const [usageResult, transcript, latestVersion] = await Promise.all([
-    getUsage(),
+    getUsage(config.usage),
     parseTranscript(stdin.transcript_path),
     getLatestVersion(),
   ]);

@@ -21,5 +21,14 @@
   "Cache": false,        // Prompt cache hit rate %
   "API Time": false,     // Time spent waiting for API responses
   "5h Reset": false,     // Countdown to 5-hour rate-limit reset
-  "7d Reset": false      // Countdown to 7-day rate-limit reset
+  "7d Reset": false,     // Countdown to 7-day rate-limit reset
+
+  // --- Usage API retry/backoff (all optional, shown with their defaults) ---
+  "successTtlMs": 60000,               // floor for the learned sweet-spot TTL (fastest we'll ever poll)
+  "nonRateLimitFailureTtlMs": 15000,   // flat retry delay after a non-429 failure (network error, 5xx, etc.)
+  "rateLimitBackoffBaseMs": 60000,     // retry delay for the first 429
+  "rateLimitBackoffMultiplier": 2,     // each consecutive 429 multiplies the retry delay by this
+  "rateLimitBackoffMaxMs": 300000,     // retry delay never grows past this (5 min); also the sweet-spot TTL ceiling
+  "rateLimitBackoffDecayFactor": 0.8,  // each success shrinks a lingering backoff by this factor
+  "sweetSpotSensitivity": 1.5          // how fast the learned TTL climbs toward the cap as recent 429s increase
 }
