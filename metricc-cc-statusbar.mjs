@@ -303,6 +303,8 @@ function writeBackCredentials(creds) {
 // Only one session refreshes the cache at a time; the rest read what it wrote.
 function acquireLock() {
   try {
+    const dir = dirname(LOCK_PATH);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(LOCK_PATH, String(process.pid), { flag: "wx" });
     return true;
   } catch (err) {
@@ -321,14 +323,18 @@ function releaseLock() {
   try { unlinkSync(LOCK_PATH); } catch { /* already gone */ }
 }
 
+// { data, stale } — stale is true when data is carried forward from the last successful fetch, not a live read.
 async function getUsage() {
   const cache = readCache();
-  if (cache && isCacheValid(cache)) return cache.data;
-  if (!acquireLock()) return cache?.data ?? null;
+  const previousData = cache?.data ?? null;
+  const asStaleResult = () => ({ data: previousData, stale: previousData != null });
+
+  if (cache && isCacheValid(cache)) return { data: cache.data, stale: !!cache.error };
+  if (!acquireLock()) return asStaleResult();
 
   try {
     let creds = getCredentials();
-    if (!creds) { writeCache(null, true); return null; }
+    if (!creds) { writeCache(previousData, true); return asStaleResult(); }
 
     // Refresh if expired
     if (creds.expiresAt && creds.expiresAt <= Date.now()) {
@@ -338,21 +344,21 @@ async function getUsage() {
           creds = { ...creds, ...refreshed };
           writeBackCredentials(creds);
         } else {
-          writeCache(null, true);
-          return null;
+          writeCache(previousData, true);
+          return asStaleResult();
         }
       } else {
-        writeCache(null, true);
-        return null;
+        writeCache(previousData, true);
+        return asStaleResult();
       }
     }
 
     const resp = await fetchUsage(creds.accessToken);
-    if (resp.status !== 200 || !resp.body) { writeCache(null, true); return null; }
+    if (resp.status !== 200 || !resp.body) { writeCache(previousData, true); return asStaleResult(); }
 
     const data = normalizeUsage(resp.body);
     writeCache(data);
-    return data;
+    return { data, stale: false };
   } finally {
     releaseLock();
   }
@@ -594,9 +600,11 @@ function padAnsi(str, width) {
 
 
 
-function render(usage, transcript, contextPct, modelId, version, latestVersion, cost, stdinData, config) {
+function render(usage, usageStale, transcript, contextPct, modelId, version, latestVersion, cost, stdinData, config) {
   const pipe = `${c.slate800}│`;
   const show = (id) => config.columns.includes(id);
+  // Dimmed color still shows the real value's severity (red/yellow/green), just softened to signal "from cache".
+  const dimIfStale = (color) => (usageStale ? `${c.dim}${color}` : color);
 
   // ── Build columns: { label, value } ──
   const columns = [];
@@ -605,9 +613,9 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
   if (show("5h Usage")) {
     let fhValue;
     if (usage) {
-      const fhColor = colorForPercent(usage.fiveHour, 60, 80);
+      const fhColor = dimIfStale(colorForPercent(usage.fiveHour, 60, 80));
       const fhReset = formatResetTime(usage.fiveHourResets);
-      fhValue = `${fhColor}${Math.round(usage.fiveHour)}%${c.reset}${fhReset ? ` ${fhReset}` : ""}`;
+      fhValue = `${fhColor}${Math.round(usage.fiveHour)}%${c.reset}${fhReset ? ` ${dimIfStale(fhReset)}` : ""}`;
     } else {
       fhValue = `${c.slate600}N/A${c.reset}`;
     }
@@ -618,9 +626,9 @@ function render(usage, transcript, contextPct, modelId, version, latestVersion, 
   if (show("7d Usage")) {
     let wkValue;
     if (usage) {
-      const wkColor = colorForPercent(usage.sevenDay, 60, 80);
+      const wkColor = dimIfStale(colorForPercent(usage.sevenDay, 60, 80));
       const wkReset = formatResetTime(usage.sevenDayResets);
-      wkValue = `${wkColor}${Math.round(usage.sevenDay)}%${c.reset}${wkReset ? ` ${wkReset}` : ""}`;
+      wkValue = `${wkColor}${Math.round(usage.sevenDay)}%${c.reset}${wkReset ? ` ${dimIfStale(wkReset)}` : ""}`;
     } else {
       wkValue = `${c.slate600}N/A${c.reset}`;
     }
@@ -807,13 +815,13 @@ async function main() {
   const version = getVersion(stdin);
 
   // Run usage API, transcript parsing, and version check concurrently
-  const [usage, transcript, latestVersion] = await Promise.all([
+  const [usageResult, transcript, latestVersion] = await Promise.all([
     getUsage(),
     parseTranscript(stdin.transcript_path),
     getLatestVersion(),
   ]);
 
-  console.log(render(usage, transcript, contextPct, modelId, version, latestVersion, stdin.cost, stdin, config));
+  console.log(render(usageResult.data, usageResult.stale, transcript, contextPct, modelId, version, latestVersion, stdin.cost, stdin, config));
 }
 
 main().catch((err) => {
