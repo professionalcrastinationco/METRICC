@@ -303,6 +303,8 @@ function writeBackCredentials(creds) {
 // Only one session refreshes the cache at a time; the rest read what it wrote.
 function acquireLock() {
   try {
+    const dir = dirname(LOCK_PATH);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(LOCK_PATH, String(process.pid), { flag: "wx" });
     return true;
   } catch (err) {
