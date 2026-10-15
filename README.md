@@ -106,7 +106,7 @@ Values change color as they approach limits:
 
 ###### Model & Version
  - ![](docs/images/icon-16px-cpu-slate-500-regular.png) Current model
- - ![](docs/images/icon-16px-percent-slate-500-regular.png) Codex 5-hour and 7-day usage % with time to reset, from local Codex session logs (hidden without Codex sessions)
+ - ![](docs/images/icon-16px-percent-slate-500-regular.png) Codex 5-hour and 7-day usage % with time to reset, from local Codex session logs (5-hour shows "Uncapped" on plans without a 5-hour window; hidden without Codex sessions)
  - ![](docs/images/icon-16px-flag-banner-slate-500-regular.png) Claude Code version
 
 ###### Auto (appear when active)

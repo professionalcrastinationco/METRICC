@@ -54,6 +54,7 @@ const HISTORY_PATH = join(HOME, ".claude", "hud", ".usage-history.json");
 const CRED_PATH = join(HOME, ".claude", ".credentials.json");
 const CODEX_SESSIONS_PATH = join(HOME, ".codex", "sessions");
 const CODEX_DAY_DIRS_TO_SCAN = 7; // resumed sessions keep writing into the day folder they started in
+const CODEX_DAY_WINDOW_MINUTES = 1440; // rate-limit windows at least this long are the weekly one
 
 // ── ANSI Colors ────────────────────────────────────────────────────────────────
 const c = {
@@ -550,7 +551,24 @@ function codexWindowResets(window) {
   return new Date(window.resets_at * 1000);
 }
 
-// { fiveHour, fiveHourResets, sevenDay, sevenDayResets } from the latest Codex token_count event, or null when there is no Codex data.
+// { percent, resets } for one window, or null when the plan does not report it.
+function codexWindowUsage(window) {
+  if (!window) return null;
+  return { percent: codexWindowPercent(window), resets: codexWindowResets(window) };
+}
+
+// Codex fills primary/secondary by plan, so match windows by length; Pro reports only the weekly one.
+function findCodexWindows(rateLimits) {
+  const reportedWindows = [rateLimits.primary, rateLimits.secondary].filter(Boolean);
+  const hasWindowLengths = reportedWindows.every((window) => typeof window.window_minutes === "number");
+  if (!hasWindowLengths) return { fiveHour: rateLimits.primary ?? null, sevenDay: rateLimits.secondary ?? null };
+
+  const fiveHour = reportedWindows.find((window) => window.window_minutes < CODEX_DAY_WINDOW_MINUTES) ?? null;
+  const sevenDay = reportedWindows.find((window) => window.window_minutes >= CODEX_DAY_WINDOW_MINUTES) ?? null;
+  return { fiveHour, sevenDay };
+}
+
+// { fiveHour, sevenDay } as { percent, resets } from the latest Codex token_count event; fiveHour is null on plans without a 5h window. Null when there is no Codex data.
 function getCodexUsage() {
   try {
     for (const file of newestCodexSessionFiles()) {
@@ -562,12 +580,12 @@ function getCodexUsage() {
         const rateLimits = entry.payload?.rate_limits;
         if (!rateLimits) continue;
         if (rateLimits.limit_id && rateLimits.limit_id !== "codex") continue;
-        if (!rateLimits.primary && !rateLimits.secondary) continue;
+
+        const windows = findCodexWindows(rateLimits);
+        if (!windows.sevenDay) continue;
         return {
-          fiveHour: codexWindowPercent(rateLimits.primary),
-          fiveHourResets: codexWindowResets(rateLimits.primary),
-          sevenDay: codexWindowPercent(rateLimits.secondary),
-          sevenDayResets: codexWindowResets(rateLimits.secondary),
+          fiveHour: codexWindowUsage(windows.fiveHour),
+          sevenDay: codexWindowUsage(windows.sevenDay),
         };
       }
     }
@@ -829,12 +847,16 @@ function render(usage, usageStale, transcript, contextPct, modelId, version, lat
 
   // Codex rate limits (hidden when this machine has no Codex sessions)
   if (show("Codex") && codexUsage) {
-    const fiveHourColor = colorForPercent(codexUsage.fiveHour, 60, 80);
-    const sevenDayColor = colorForPercent(codexUsage.sevenDay, 60, 80);
-    const fiveHourReset = formatResetTime(codexUsage.fiveHourResets);
-    const sevenDayReset = formatResetTime(codexUsage.sevenDayResets);
-    columns.push({ label: `${c.slate800bold}5h Codex:${c.reset}`, value: `${fiveHourColor}${Math.round(codexUsage.fiveHour)}%${c.reset}${fiveHourReset ? ` ${fiveHourReset}` : ""}` });
-    columns.push({ label: `${c.slate800bold}7d Codex:${c.reset}`, value: `${sevenDayColor}${Math.round(codexUsage.sevenDay)}%${c.reset}${sevenDayReset ? ` ${sevenDayReset}` : ""}` });
+    const sevenDayColor = colorForPercent(codexUsage.sevenDay.percent, 60, 80);
+    const sevenDayReset = formatResetTime(codexUsage.sevenDay.resets);
+    if (codexUsage.fiveHour) {
+      const fiveHourColor = colorForPercent(codexUsage.fiveHour.percent, 60, 80);
+      const fiveHourReset = formatResetTime(codexUsage.fiveHour.resets);
+      columns.push({ label: `${c.slate800bold}5h Codex:${c.reset}`, value: `${fiveHourColor}${Math.round(codexUsage.fiveHour.percent)}%${c.reset}${fiveHourReset ? ` ${fiveHourReset}` : ""}` });
+    } else {
+      columns.push({ label: `${c.slate800bold}5h Codex:${c.reset}`, value: `${c.slate600}Uncapped${c.reset}` });
+    }
+    columns.push({ label: `${c.slate800bold}7d Codex:${c.reset}`, value: `${sevenDayColor}${Math.round(codexUsage.sevenDay.percent)}%${c.reset}${sevenDayReset ? ` ${sevenDayReset}` : ""}` });
   }
 
   // Version
