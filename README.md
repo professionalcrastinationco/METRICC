@@ -256,6 +256,7 @@ Edit `~/.claude/hud/config.jsonc` to toggle any stat on or off:
   "Context": true,
   "Model": true,
   "Codex": true,
+  "5h Codex": true,
   "Version": true,
 
   // ── Session (off by default) ──

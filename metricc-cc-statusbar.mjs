@@ -38,7 +38,7 @@ const VERSION_CACHE_TTL_MS = 3_600_000; // 1hr cache for npm version check
 
 const ALL_COLUMNS = [
   // Standard
-  "5h Usage", "7d Usage", "Context", "Model", "Codex", "Version",
+  "5h Usage", "7d Usage", "Context", "Model", "Codex", "5h Codex", "Version",
   // Session
   "Session", "Changes", "Directory", "Cost",
   // Advanced
@@ -92,7 +92,7 @@ function parseJsonc(text) {
 
 const SECTION_DEFAULTS = {
   // Standard: on by default
-  "5h Usage": true, "7d Usage": true, "Context": true, "Model": true, "Codex": true, "Version": true,
+  "5h Usage": true, "7d Usage": true, "Context": true, "Model": true, "Codex": true, "5h Codex": true, "Version": true,
   // Session: off by default
   "Session": false, "Changes": false, "Directory": false, "Cost": false,
   // Advanced: off by default
@@ -849,12 +849,14 @@ function render(usage, usageStale, transcript, contextPct, modelId, version, lat
   if (show("Codex") && codexUsage) {
     const sevenDayColor = colorForPercent(codexUsage.sevenDay.percent, 60, 80);
     const sevenDayReset = formatResetTime(codexUsage.sevenDay.resets);
-    if (codexUsage.fiveHour) {
-      const fiveHourColor = colorForPercent(codexUsage.fiveHour.percent, 60, 80);
-      const fiveHourReset = formatResetTime(codexUsage.fiveHour.resets);
-      columns.push({ label: `${c.slate800bold}5h Codex:${c.reset}`, value: `${fiveHourColor}${Math.round(codexUsage.fiveHour.percent)}%${c.reset}${fiveHourReset ? ` ${fiveHourReset}` : ""}` });
-    } else {
-      columns.push({ label: `${c.slate800bold}5h Codex:${c.reset}`, value: `${c.slate600}Uncapped${c.reset}` });
+    if (show("5h Codex")) {
+      if (codexUsage.fiveHour) {
+        const fiveHourColor = colorForPercent(codexUsage.fiveHour.percent, 60, 80);
+        const fiveHourReset = formatResetTime(codexUsage.fiveHour.resets);
+        columns.push({ label: `${c.slate800bold}5h Codex:${c.reset}`, value: `${fiveHourColor}${Math.round(codexUsage.fiveHour.percent)}%${c.reset}${fiveHourReset ? ` ${fiveHourReset}` : ""}` });
+      } else {
+        columns.push({ label: `${c.slate800bold}5h Codex:${c.reset}`, value: `${c.slate600}Uncapped${c.reset}` });
+      }
     }
     columns.push({ label: `${c.slate800bold}7d Codex:${c.reset}`, value: `${sevenDayColor}${Math.round(codexUsage.sevenDay.percent)}%${c.reset}${sevenDayReset ? ` ${sevenDayReset}` : ""}` });
   }
