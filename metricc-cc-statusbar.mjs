@@ -7,7 +7,7 @@
  * - stdin JSON from Claude Code (context window, model, transcript path)
  * - Anthropic OAuth API (5h/7d rate limits) — cached 60s
  * - Transcript JSONL (session start, running agents)
- * - Codex session logs (~/.codex/sessions) for Codex 5h/7d rate limits
+ * - ChatGPT usage API (Codex 5h/7d rate limits) — cached 60s, falls back to Codex session logs (~/.codex/sessions)
  */
 
 import { existsSync, readFileSync, writeFileSync, renameSync, statSync, openSync, readSync, closeSync, mkdirSync, unlinkSync, createReadStream, readdirSync } from "node:fs";
@@ -47,12 +47,24 @@ const ALL_COLUMNS = [
 
 const HOME = homedir();
 const CONFIG_PATH = join(HOME, ".claude", "hud", "config.jsonc");
-const CACHE_PATH = join(HOME, ".claude", "hud", ".usage-cache.json");
-const LOCK_PATH = join(HOME, ".claude", "hud", ".usage-cache.lock");
 const VERSION_CACHE_PATH = join(HOME, ".claude", "hud", ".version-cache.json");
-const HISTORY_PATH = join(HOME, ".claude", "hud", ".usage-history.json");
 const CRED_PATH = join(HOME, ".claude", ".credentials.json");
 const CODEX_SESSIONS_PATH = join(HOME, ".codex", "sessions");
+const CODEX_AUTH_PATH = join(HOME, ".codex", "auth.json");
+
+// Each usage API gets its own cache, lock and 429 history so one provider's backoff never slows the other.
+const CLAUDE_USAGE_SOURCE = {
+  cachePath: join(HOME, ".claude", "hud", ".usage-cache.json"),
+  lockPath: join(HOME, ".claude", "hud", ".usage-cache.lock"),
+  historyPath: join(HOME, ".claude", "hud", ".usage-history.json"),
+  fetchData: fetchClaudeUsage,
+};
+const CODEX_USAGE_SOURCE = {
+  cachePath: join(HOME, ".claude", "hud", ".codex-usage-cache.json"),
+  lockPath: join(HOME, ".claude", "hud", ".codex-usage-cache.lock"),
+  historyPath: join(HOME, ".claude", "hud", ".codex-usage-history.json"),
+  fetchData: fetchCodexUsage,
+};
 const CODEX_DAY_DIRS_TO_SCAN = 7; // resumed sessions keep writing into the day folder they started in
 const CODEX_DAY_WINDOW_MINUTES = 1440; // rate-limit windows at least this long are the weekly one
 
@@ -181,10 +193,10 @@ function getVersion(stdin) {
 }
 
 // ── Usage API (Anthropic OAuth) ────────────────────────────────────────────────
-function readCache() {
+function readCache(source) {
   try {
-    if (!existsSync(CACHE_PATH)) return null;
-    const cache = JSON.parse(readFileSync(CACHE_PATH, "utf-8"));
+    if (!existsSync(source.cachePath)) return null;
+    const cache = JSON.parse(readFileSync(source.cachePath, "utf-8"));
     // Reconstitute Date objects lost during JSON serialization
     if (cache?.data) {
       if (cache.data.fiveHourResets) cache.data.fiveHourResets = new Date(cache.data.fiveHourResets);
@@ -196,39 +208,39 @@ function readCache() {
   }
 }
 
-function writeCache(data, error = false, { rateLimited = false, backoffMs = null } = {}) {
+function writeCache(source, data, error = false, { rateLimited = false, backoffMs = null } = {}) {
   try {
-    const dir = dirname(CACHE_PATH);
+    const dir = dirname(source.cachePath);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     // Temp-file-then-rename: readers never observe a partial write.
-    const tmpPath = `${CACHE_PATH}.${process.pid}.tmp`;
+    const tmpPath = `${source.cachePath}.${process.pid}.tmp`;
     writeFileSync(tmpPath, JSON.stringify({ timestamp: Date.now(), data, error, rateLimited, backoffMs }));
-    renameSync(tmpPath, CACHE_PATH);
+    renameSync(tmpPath, source.cachePath);
   } catch { /* ignore */ }
 }
 
 // Rolling record of the last HISTORY_MAX_ENTRIES fetch outcomes, used to learn a per-machine sweet-spot TTL.
 // Concurrent sessions may race this read-modify-write; losing an occasional entry is fine for a rolling average.
-function readHistory() {
+function readHistory(source) {
   try {
-    if (!existsSync(HISTORY_PATH)) return [];
-    const entries = JSON.parse(readFileSync(HISTORY_PATH, "utf-8"));
+    if (!existsSync(source.historyPath)) return [];
+    const entries = JSON.parse(readFileSync(source.historyPath, "utf-8"));
     return Array.isArray(entries) ? entries : [];
   } catch {
     return [];
   }
 }
 
-function recordHistoryEntry(rateLimited) {
+function recordHistoryEntry(source, rateLimited) {
   try {
-    const entries = readHistory();
+    const entries = readHistory(source);
     entries.push({ timestamp: Date.now(), rateLimited });
     const trimmed = entries.slice(-HISTORY_MAX_ENTRIES);
-    const dir = dirname(HISTORY_PATH);
+    const dir = dirname(source.historyPath);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    const tmpPath = `${HISTORY_PATH}.${process.pid}.tmp`;
+    const tmpPath = `${source.historyPath}.${process.pid}.tmp`;
     writeFileSync(tmpPath, JSON.stringify(trimmed));
-    renameSync(tmpPath, HISTORY_PATH);
+    renameSync(tmpPath, source.historyPath);
   } catch { /* ignore */ }
 }
 
@@ -236,8 +248,8 @@ function recordHistoryEntry(rateLimited) {
 // how often recent attempts got rate-limited. 0% rate-limited in the window → stay at the fast default TTL
 // (favor freshness). As the rate-limited fraction climbs, slide toward the backoff cap (favor avoiding 429s),
 // with a safety margin so the learned TTL sits a bit above the minimum that was merely "good enough" recently.
-function computeSweetSpotTtlMs(usageConfig) {
-  const entries = readHistory();
+function computeSweetSpotTtlMs(source, usageConfig) {
+  const entries = readHistory(source);
   if (entries.length === 0) return usageConfig.successTtlMs;
 
   const rateLimitedCount = entries.filter((entry) => entry.rateLimited).length;
@@ -250,8 +262,8 @@ function computeSweetSpotTtlMs(usageConfig) {
 
 // 429s get their own exponential-backoff TTL (stored on the cache entry); other failures use a flat retry delay;
 // a successful fetch uses the learned sweet-spot TTL instead of the raw configured default.
-function isCacheValid(cache, usageConfig) {
-  let ttl = computeSweetSpotTtlMs(usageConfig);
+function isCacheValid(source, cache, usageConfig) {
+  let ttl = computeSweetSpotTtlMs(source, usageConfig);
   if (cache.error) {
     ttl = cache.rateLimited ? (cache.backoffMs ?? usageConfig.rateLimitBackoffBaseMs) : usageConfig.nonRateLimitFailureTtlMs;
   }
@@ -327,13 +339,13 @@ function refreshAccessToken(refreshToken) {
 }
 
 // Includes status so callers can see 429s, not just the body.
-function fetchUsage(accessToken) {
+function fetchJson(hostname, path, headers) {
   return new Promise((resolve) => {
     const req = https.request({
-      hostname: "api.anthropic.com",
-      path: "/api/oauth/usage",
+      hostname,
+      path,
       method: "GET",
-      headers: { Authorization: `Bearer ${accessToken}`, "anthropic-beta": "oauth-2025-04-20", "Content-Type": "application/json" },
+      headers,
       timeout: API_TIMEOUT_MS,
     }, (res) => {
       let data = "";
@@ -380,17 +392,17 @@ function writeBackCredentials(creds) {
 }
 
 // Only one session refreshes the cache at a time; the rest read what it wrote.
-function acquireLock() {
+function acquireLock(source) {
   try {
-    const dir = dirname(LOCK_PATH);
+    const dir = dirname(source.lockPath);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    writeFileSync(LOCK_PATH, String(process.pid), { flag: "wx" });
+    writeFileSync(source.lockPath, String(process.pid), { flag: "wx" });
     return true;
   } catch (err) {
     if (err.code !== "EEXIST") return false;
     try {
-      if (Date.now() - statSync(LOCK_PATH).mtimeMs > LOCK_STALE_MS) {
-        writeFileSync(LOCK_PATH, String(process.pid));
+      if (Date.now() - statSync(source.lockPath).mtimeMs > LOCK_STALE_MS) {
+        writeFileSync(source.lockPath, String(process.pid));
         return true;
       }
     } catch { /* lock vanished mid-check; treat as contended */ }
@@ -398,59 +410,60 @@ function acquireLock() {
   }
 }
 
-function releaseLock() {
-  try { unlinkSync(LOCK_PATH); } catch { /* already gone */ }
+function releaseLock(source) {
+  try { unlinkSync(source.lockPath); } catch { /* already gone */ }
+}
+
+// { status, data } from the Anthropic usage API; status 0 covers missing credentials and network failures.
+async function fetchClaudeUsage() {
+  let creds = getCredentials();
+  if (!creds) return { status: 0, data: null };
+
+  if (creds.expiresAt && creds.expiresAt <= Date.now()) {
+    if (!creds.refreshToken) return { status: 0, data: null };
+    const refreshed = await refreshAccessToken(creds.refreshToken);
+    if (!refreshed) return { status: 0, data: null };
+    creds = { ...creds, ...refreshed };
+    writeBackCredentials(creds);
+  }
+
+  const resp = await fetchJson("api.anthropic.com", "/api/oauth/usage", {
+    Authorization: `Bearer ${creds.accessToken}`,
+    "anthropic-beta": "oauth-2025-04-20",
+    "Content-Type": "application/json",
+  });
+  if (!resp.body) return { status: resp.status, data: null };
+  return { status: resp.status, data: normalizeUsage(resp.body) };
 }
 
 // { data, stale } — stale is true when data is carried forward from the last successful fetch, not a live read.
-async function getUsage(usageConfig) {
-  const cache = readCache();
+async function getUsage(source, usageConfig) {
+  const cache = readCache(source);
   const previousData = cache?.data ?? null;
   const asStaleResult = () => ({ data: previousData, stale: previousData != null });
 
-  if (cache && isCacheValid(cache, usageConfig)) return { data: cache.data, stale: !!cache.error };
-  if (!acquireLock()) return asStaleResult();
+  if (cache && isCacheValid(source, cache, usageConfig)) return { data: cache.data, stale: !!cache.error };
+  if (!acquireLock(source)) return asStaleResult();
 
   // Carries the last-known backoff forward so consecutive 429s keep growing it, and successes keep decaying it.
   const priorBackoffMs = cache?.backoffMs ?? usageConfig.rateLimitBackoffBaseMs;
 
   try {
-    let creds = getCredentials();
-    if (!creds) { writeCache(previousData, true); return asStaleResult(); }
-
-    // Refresh if expired
-    if (creds.expiresAt && creds.expiresAt <= Date.now()) {
-      if (creds.refreshToken) {
-        const refreshed = await refreshAccessToken(creds.refreshToken);
-        if (refreshed) {
-          creds = { ...creds, ...refreshed };
-          writeBackCredentials(creds);
-        } else {
-          writeCache(previousData, true);
-          return asStaleResult();
-        }
-      } else {
-        writeCache(previousData, true);
-        return asStaleResult();
-      }
-    }
-
-    const resp = await fetchUsage(creds.accessToken);
-    if (resp.status === 429) {
+    const result = await source.fetchData();
+    if (result.status === 429) {
       const nextBackoffMs = Math.min(priorBackoffMs * usageConfig.rateLimitBackoffMultiplier, usageConfig.rateLimitBackoffMaxMs);
-      writeCache(previousData, true, { rateLimited: true, backoffMs: nextBackoffMs });
-      recordHistoryEntry(true);
+      writeCache(source, previousData, true, { rateLimited: true, backoffMs: nextBackoffMs });
+      recordHistoryEntry(source, true);
       return asStaleResult();
     }
-    if (resp.status !== 200 || !resp.body) { writeCache(previousData, true); return asStaleResult(); }
+    if (result.status !== 200 || !result.data) { writeCache(source, previousData, true); return asStaleResult(); }
 
-    const data = normalizeUsage(resp.body);
     const decayedBackoffMs = Math.max(usageConfig.rateLimitBackoffBaseMs, priorBackoffMs * usageConfig.rateLimitBackoffDecayFactor);
-    writeCache(data, false, { backoffMs: decayedBackoffMs });
-    recordHistoryEntry(false);
-    return { data, stale: false };
+    writeCache(source, result.data, false, { backoffMs: decayedBackoffMs });
+    recordHistoryEntry(source, false);
+    return { data: result.data, stale: false };
   } finally {
-    releaseLock();
+    releaseLock(source);
   }
 }
 
@@ -568,29 +581,70 @@ function findCodexWindows(rateLimits) {
   return { fiveHour, sevenDay };
 }
 
-// { fiveHour, sevenDay } as { percent, resets } from the latest Codex token_count event; fiveHour is null on plans without a 5h window. Null when there is no Codex data.
-function getCodexUsage() {
-  try {
-    for (const file of newestCodexSessionFiles()) {
-      const lines = readTailLines(file.filePath, file.size, MAX_TAIL_BYTES);
-      for (let index = lines.length - 1; index >= 0; index--) {
-        if (!lines[index].includes('"token_count"')) continue;
-        let entry;
-        try { entry = JSON.parse(lines[index]); } catch { continue; }
-        const rateLimits = entry.payload?.rate_limits;
-        if (!rateLimits) continue;
-        if (rateLimits.limit_id && rateLimits.limit_id !== "codex") continue;
+// The last Codex rate_limits payload in a rollout file with its event time, or null when the file has none.
+function lastCodexRateLimits(file) {
+  const lines = readTailLines(file.filePath, file.size, MAX_TAIL_BYTES);
+  for (let index = lines.length - 1; index >= 0; index--) {
+    if (!lines[index].includes('"token_count"')) continue;
+    let entry;
+    try { entry = JSON.parse(lines[index]); } catch { continue; }
+    const rateLimits = entry.payload?.rate_limits;
+    if (!rateLimits) continue;
+    if (rateLimits.limit_id && rateLimits.limit_id !== "codex") continue;
+    if (!rateLimits.primary && !rateLimits.secondary) continue;
+    return { rateLimits, timestampMs: Date.parse(entry.timestamp) || 0 };
+  }
+  return null;
+}
 
-        const windows = findCodexWindows(rateLimits);
-        if (!windows.sevenDay) continue;
-        return {
-          fiveHour: codexWindowUsage(windows.fiveHour),
-          sevenDay: codexWindowUsage(windows.sevenDay),
-        };
-      }
+// The rate_limits payload of the newest Codex token_count event, or null when there is no Codex data.
+// Codex appends non-usage events (e.g. thread_settings_applied) to old threads, so mtime alone doesn't point at the newest usage.
+function newestLocalCodexRateLimits() {
+  try {
+    let newest = null;
+    for (const file of newestCodexSessionFiles()) {
+      // A file can't hold an event newer than its own mtime.
+      if (newest && file.mtimeMs < newest.timestampMs) break;
+      const candidate = lastCodexRateLimits(file);
+      if (candidate && (!newest || candidate.timestampMs > newest.timestampMs)) newest = candidate;
     }
+    return newest?.rateLimits ?? null;
   } catch { /* no Codex data */ }
   return null;
+}
+
+// { status, data } from the ChatGPT usage endpoint the Codex CLI reads, mapped to the session-log rate_limits shape.
+// ponytail: never refreshes the Codex token (Codex rotates it); an expired token falls back to session logs until Codex refreshes it.
+async function fetchCodexUsage() {
+  let tokens;
+  try { tokens = JSON.parse(readFileSync(CODEX_AUTH_PATH, "utf-8")).tokens; } catch { return { status: 0, data: null }; }
+  if (!tokens?.access_token) return { status: 0, data: null };
+
+  const headers = { Authorization: `Bearer ${tokens.access_token}`, "User-Agent": "codex-cli" };
+  if (tokens.account_id) headers["ChatGPT-Account-Id"] = tokens.account_id;
+  const resp = await fetchJson("chatgpt.com", "/backend-api/wham/usage", headers);
+
+  const rateLimit = resp.body?.rate_limit;
+  if (!rateLimit?.primary_window && !rateLimit?.secondary_window) return { status: resp.status, data: null };
+  const toWindow = (window) => {
+    if (!window) return null;
+    const mapped = { used_percent: window.used_percent, resets_at: window.reset_at };
+    if (typeof window.limit_window_seconds === "number") mapped.window_minutes = window.limit_window_seconds / 60;
+    return mapped;
+  };
+  return { status: resp.status, data: { primary: toWindow(rateLimit.primary_window), secondary: toWindow(rateLimit.secondary_window) } };
+}
+
+// { fiveHour, sevenDay } as { percent, resets } from the live usage API, else the newest session log; fiveHour is null on plans without a 5h window. Null when there is no Codex data.
+// Session logs only update when Codex runs a turn, so they miss early resets; the live API doesn't.
+async function getCodexUsage(usageConfig) {
+  const live = await getUsage(CODEX_USAGE_SOURCE, usageConfig);
+  const rateLimits = live.data ?? newestLocalCodexRateLimits();
+  if (!rateLimits) return null;
+
+  const windows = findCodexWindows(rateLimits);
+  if (!windows.sevenDay) return null;
+  return { fiveHour: codexWindowUsage(windows.fiveHour), sevenDay: codexWindowUsage(windows.sevenDay) };
 }
 
 // ── Transcript Parser ──────────────────────────────────────────────────────────
@@ -1008,14 +1062,13 @@ async function main() {
   const modelId = getModelId(stdin);
   const version = getVersion(stdin);
 
-  // Run usage API, transcript parsing, and version check concurrently
-  const [usageResult, transcript, latestVersion] = await Promise.all([
-    getUsage(config.usage),
+  // Run usage APIs, transcript parsing, and version check concurrently
+  const [usageResult, transcript, latestVersion, codexUsage] = await Promise.all([
+    getUsage(CLAUDE_USAGE_SOURCE, config.usage),
     parseTranscript(stdin.transcript_path),
     getLatestVersion(),
+    config.columns.includes("Codex") ? getCodexUsage(config.usage) : null,
   ]);
-
-  const codexUsage = config.columns.includes("Codex") ? getCodexUsage() : null;
 
   console.log(render(usageResult.data, usageResult.stale, transcript, contextPct, modelId, version, latestVersion, stdin.cost, stdin, config, codexUsage));
 }
