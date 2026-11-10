@@ -7,6 +7,8 @@
   "7d Usage": true,      // 7-day rolling rate-limit utilization %
   "Context": true,       // Context window usage %
   "Model": true,         // Active Claude model name
+  "Codex": true,         // Codex rate-limit usage, master switch for both Codex columns
+  "5h Codex": true,      // Codex 5h rate-limit usage, "Uncapped" on plans without one
   "Version": true,       // Installed version vs latest available
 
   // --- Session (off by default) ---

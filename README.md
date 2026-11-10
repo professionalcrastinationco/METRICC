@@ -83,7 +83,7 @@ Values change color as they approach limits:
 
 ---
 
-## ![](docs/images/icon-20px-list-checks-orange-500-regular.png) Choose From 16 Stats
+## ![](docs/images/icon-20px-list-checks-orange-500-regular.png) Choose From 17 Stats
 
 ###### Rate Limits
  - ![](docs/images/icon-16px-percent-slate-500-regular.png) 5-hour usage %
@@ -106,6 +106,7 @@ Values change color as they approach limits:
 
 ###### Model & Version
  - ![](docs/images/icon-16px-cpu-slate-500-regular.png) Current model
+ - ![](docs/images/icon-16px-percent-slate-500-regular.png) Codex 5-hour and 7-day usage % with time to reset, from the ChatGPT usage API your Codex login uses, falling back to local Codex session logs (5-hour shows "Uncapped" on plans without a 5-hour window; hidden without Codex data)
  - ![](docs/images/icon-16px-flag-banner-slate-500-regular.png) Claude Code version
 
 ###### Auto (appear when active)
@@ -254,6 +255,8 @@ Edit `~/.claude/hud/config.jsonc` to toggle any stat on or off:
   "7d Usage": true,
   "Context": true,
   "Model": true,
+  "Codex": true,
+  "5h Codex": true,
   "Version": true,
 
   // ── Session (off by default) ──
